@@ -1,7 +1,7 @@
 import { clusterFiles } from './config';
 import { execSync } from 'child_process';
 import { getInstanceIds, getInstances } from './asg';
-import { getMasterNodeIP, putMasterNodeIP } from './db';
+import { getOwnerNodeIP, putOwnerNodeIP } from './db';
 
 let locked = false;
 const startedAt = Date.now();
@@ -45,10 +45,9 @@ export async function checkRedisClusterHealth() {
             );
             if (!myInstance)
                 throw new Error(`Instance ${clusterFiles.ipAddress} not found in the ASG.`);
-            else if (instanceIds[0] !== myInstance.InstanceId)
-                throw new Error(
-                    `I am not the master. Let's wait for the master to create the cluster.`
-                );
+
+            // * take over the owner node
+            await putOwnerNodeIP(clusterFiles.ipAddress);
 
             // * create the cluster with the instances in the ASG
             const ipPortPairs = Object.values(instances)
@@ -58,7 +57,6 @@ export async function checkRedisClusterHealth() {
             const createClusterCommand = `redis-cli -a ${clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig}`;
             console.log('>', createClusterCommand);
             execSync(createClusterCommand, { stdio: 'inherit' });
-            await putMasterNodeIP(clusterFiles.ipAddress);
         } else {
             if (Date.now() - startedAt < delay)
                 throw new Error('Give the cluster some time to start');
@@ -70,10 +68,10 @@ export async function checkRedisClusterHealth() {
             console.log(nodesRaw);
             const nodes = parseRedisNodes(nodesRaw);
             if (nodes[clusterFiles.ipAddress]?.master) {
-                const masterIp = await getMasterNodeIP();
-                if (!masterIp) throw new Error('Master node IP not found in the DB');
-                else if (masterIp === clusterFiles.ipAddress) {
-                    // * I am the master node. Let's check if there are new nodes in the ASG
+                const ownerIp = await getOwnerNodeIP();
+                if (!ownerIp) throw new Error('Master node IP not found in the DB');
+                else if (ownerIp === clusterFiles.ipAddress) {
+                    // * I am the owner node. Let's check if there are new nodes in the ASG
                     const instanceIds = await getInstanceIds();
                     const instances = await getInstances(instanceIds);
                     const newInstanceIps = Object.values(instances)
@@ -89,26 +87,10 @@ export async function checkRedisClusterHealth() {
                             console.log('>', command);
                             execSync(command).toString();
                         }
-
-                        // * wait for the new nodes to join the cluster
-                        let steps = 0;
-                        while (true) {
-                            steps++;
-                            if (steps > 10) break;
-
-                            await new Promise((resolve) => setTimeout(resolve, 5000));
-
-                            const nodes = parseRedisNodes(execSync(clusterNodesCommand).toString());
-                            const healthyNewNodes = Object.values(nodes).filter(
-                                (node) => newInstanceIps.includes(node.ip) && node.healthy
-                            );
-                            if (healthyNewNodes.length === newInstanceIps.length) break;
-                        }
-
                         mustRebalance = true;
                     }
 
-                    // * check if there are unhealthy nodes in the cluster
+                    // * Check if there are unhealthy nodes in the cluster
                     const unhealthyNodes = Object.values(nodes).filter(({ healthy }) => !healthy);
                     if (unhealthyNodes.length) {
                         // * remove unhealthy nodes from the cluster
@@ -117,8 +99,10 @@ export async function checkRedisClusterHealth() {
                             console.log('>', command);
                             execSync(command).toString();
                         }
+                        mustRebalance = true;
+                    }
 
-                        // * wait for the new nodes to join the cluster
+                    if (mustRebalance) {
                         let steps = 0;
                         while (true) {
                             steps++;
@@ -126,32 +110,33 @@ export async function checkRedisClusterHealth() {
 
                             await new Promise((resolve) => setTimeout(resolve, 5000));
 
+                            // * make sure the new nodes are healthy and the unhealthy nodes are removed
                             const nodes = parseRedisNodes(execSync(clusterNodesCommand).toString());
-                            const markedUnhealthyNodes = Object.values(nodes).filter((node) =>
+                            const healthyNewNodes = Object.values(nodes).filter(
+                                (node) => newInstanceIps.includes(node.ip) && node.healthy
+                            );
+                            const notRemovedUnhealthyNodes = Object.values(nodes).filter((node) =>
                                 unhealthyNodes.find(({ id }) => id === node.id)
                             );
-                            if (!markedUnhealthyNodes.length) break;
+                            const newNodesAdded = healthyNewNodes.length === newInstanceIps.length;
+                            if (newNodesAdded && !notRemovedUnhealthyNodes.length) break;
                         }
 
-                        mustRebalance = true;
-                    }
-
-                    if (mustRebalance) {
                         // * rebalance the cluster
                         const command = `redis-cli -a ${clusterFiles.password} cluster rebalance`;
                         console.log('>', command);
                         execSync(command).toString();
                     }
                 } else {
-                    // * Check if the master node is healthy
-                    if (!nodes[masterIp]?.healthy) {
+                    // * Check if the owner node is healthy
+                    if (!nodes[ownerIp]?.healthy) {
                         console.log(
-                            `Master node ${masterIp} is not healthy. I am trying to take over.`
+                            `Master node ${ownerIp} is not healthy. I am trying to take over.`
                         );
                         try {
-                            await putMasterNodeIP(clusterFiles.ipAddress, masterIp);
+                            await putOwnerNodeIP(clusterFiles.ipAddress, ownerIp);
                         } catch (e) {
-                            console.log('Cannot take over the master node from', masterIp);
+                            console.log('Cannot take over the owner node from', ownerIp);
                         }
                     }
                 }

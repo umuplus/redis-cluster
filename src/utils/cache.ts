@@ -3,11 +3,18 @@ import { execSync } from 'child_process';
 import { getInstanceIds, getInstances } from './asg';
 import { getMasterNodeIP, putMasterNodeIP } from './db';
 
+let locked = false;
 const startedAt = Date.now();
 const delay = 60000 * 10; // * 10 minutes
 
 export async function checkRedisClusterHealth() {
     try {
+        if (locked) {
+            console.log('Health check is locked');
+            return;
+        }
+
+        locked = true;
         if (!clusterFiles.ipAddress) throw new Error('I do not know my own IP address :(');
 
         // * check redis service status
@@ -69,24 +76,78 @@ export async function checkRedisClusterHealth() {
                     // * I am the master node. Let's check if there are new nodes in the ASG
                     const instanceIds = await getInstanceIds();
                     const instances = await getInstances(instanceIds);
-                    const newInstances = Object.values(instances).filter(
-                        ({ PrivateIpAddress }) => PrivateIpAddress && !nodes[PrivateIpAddress]
-                    );
-                    if (newInstances.length) {
-                        // ! add new nodes to the cluster
+                    const newInstanceIps = Object.values(instances)
+                        .filter(
+                            ({ PrivateIpAddress }) => PrivateIpAddress && !nodes[PrivateIpAddress]
+                        )
+                        .map(({ PrivateIpAddress }) => PrivateIpAddress!);
+                    let mustRebalance = false;
+                    if (newInstanceIps.length) {
+                        // * add new nodes to the cluster
+                        for (const ip of newInstanceIps) {
+                            const command = `redis-cli -a ${clusterFiles.password} cluster meet ${ip} 6379`;
+                            console.log('>', command);
+                            execSync(command).toString();
+                        }
+
+                        // * wait for the new nodes to join the cluster
+                        let steps = 0;
+                        while (true) {
+                            steps++;
+                            if (steps > 10) break;
+
+                            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                            const nodes = parseRedisNodes(execSync(clusterNodesCommand).toString());
+                            const healthyNewNodes = Object.values(nodes).filter(
+                                (node) => newInstanceIps.includes(node.ip) && node.healthy
+                            );
+                            if (healthyNewNodes.length === newInstanceIps.length) break;
+                        }
+
+                        mustRebalance = true;
                     }
 
                     // * check if there are unhealthy nodes in the cluster
-                    const unhealthyNodes = Object.entries(nodes).filter(
-                        ([_, { healthy }]) => !healthy
-                    );
+                    const unhealthyNodes = Object.values(nodes).filter(({ healthy }) => !healthy);
                     if (unhealthyNodes.length) {
-                        // ! remove unhealthy nodes from the cluster
+                        // * remove unhealthy nodes from the cluster
+                        for (const { id } of unhealthyNodes) {
+                            const command = `redis-cli -a ${clusterFiles.password} cluster forget ${id}`;
+                            console.log('>', command);
+                            execSync(command).toString();
+                        }
+
+                        // * wait for the new nodes to join the cluster
+                        let steps = 0;
+                        while (true) {
+                            steps++;
+                            if (steps > 10) break;
+
+                            await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                            const nodes = parseRedisNodes(execSync(clusterNodesCommand).toString());
+                            const markedUnhealthyNodes = Object.values(nodes).filter((node) =>
+                                unhealthyNodes.find(({ id }) => id === node.id)
+                            );
+                            if (!markedUnhealthyNodes.length) break;
+                        }
+
+                        mustRebalance = true;
+                    }
+
+                    if (mustRebalance) {
+                        // * rebalance the cluster
+                        const command = `redis-cli -a ${clusterFiles.password} cluster rebalance`;
+                        console.log('>', command);
+                        execSync(command).toString();
                     }
                 } else {
                     // * Check if the master node is healthy
                     if (!nodes[masterIp]?.healthy) {
-                        console.log(`Master node ${masterIp} is not healthy`);
+                        console.log(
+                            `Master node ${masterIp} is not healthy. I am trying to take over.`
+                        );
                         try {
                             await putMasterNodeIP(clusterFiles.ipAddress, masterIp);
                         } catch (e) {
@@ -96,17 +157,36 @@ export async function checkRedisClusterHealth() {
                 }
             }
         }
+        locked = false;
     } catch (e) {
+        locked = false;
         console.error((e as Error).message);
     }
 }
 
+type RedisClusterNode = {
+    id: string;
+    ip: string;
+    master: boolean;
+    healthy: boolean;
+    shards: string[];
+};
 function parseRedisNodes(payload: string) {
     const nodes = payload.split('\n');
-    return nodes.reduce((final: Record<string, { master: boolean; healthy: boolean }>, node) => {
-        const [_, ipAddress, _flags, masterId, _ping, _pong, _epoch, status] = node.split(' ');
+    return nodes.reduce((final: Record<string, RedisClusterNode>, node) => {
+        const [id, ipAddress, _flags, masterId, _ping, _pong, _epoch, status, shards] =
+            node.split(' ');
         const [ip] = ipAddress.split(':');
-        final[ip] = { master: masterId === '-', healthy: status === 'connected' };
+        final[ip] = {
+            id,
+            ip,
+            master: masterId === '-',
+            healthy: status === 'connected',
+            shards: shards
+                .trim()
+                .split('-')
+                .filter((shard) => shard),
+        };
         return final;
     }, {});
 }

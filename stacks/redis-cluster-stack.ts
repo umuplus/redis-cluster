@@ -113,8 +113,12 @@ export class RedisClusterStack extends Stack {
         securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(6379));
         securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(16379));
 
+        const commonInitPath = joinPath(rootFolder, 'scripts', 'common-init.sh');
+        const commonInitSourceCode = readFileSync(commonInitPath, 'utf-8');
         const cacheInitPath = joinPath(rootFolder, 'scripts', 'cache-init.sh');
         const cacheInitSourceCode = readFileSync(cacheInitPath, 'utf-8')
+            .replace('{{COMMON}}', commonInitSourceCode)
+            .replace('{{NODE_TYPE}}', 'cache')
             .replace(/{{REDIS_PASSWORD}}/g, password)
             .replace('{{PRIVATE_KEY}}', privateKey)
             .replace('{{PUBLIC_KEY}}', publicKey)
@@ -133,13 +137,22 @@ export class RedisClusterStack extends Stack {
             keyName: keyPair.keyName,
         });
 
+        const proxyInitPath = joinPath(rootFolder, 'scripts', 'proxy-init.sh');
+        const proxyInitSourceCode = readFileSync(proxyInitPath, 'utf-8')
+            .replace('{{COMMON}}', commonInitSourceCode)
+            .replace('{{NODE_TYPE}}', 'proxy')
+            .replace(/{{REDIS_PASSWORD}}/g, password)
+            .replace('{{PRIVATE_KEY}}', privateKey)
+            .replace('{{PUBLIC_KEY}}', publicKey)
+            .replace('{{CREDENTIALS}}', credentials)
+            .replace('{{CLUSTER_REPLICAS}}', cluster.cache.replicas.toString());
         new AutoScalingGroup(this, 'ProxyASG', {
             vpc,
             autoScalingGroupName: 'RedisClusterProxyASG',
             vpcSubnets: { subnetType: SubnetType.PUBLIC },
             instanceType: new InstanceType(cluster.proxy.type),
             machineImage: new GenericLinuxImage(AWS_EC2_AMI_UBUNTU_2204LTS),
-            userData: UserData.custom(cacheInitSourceCode),
+            userData: UserData.custom(proxyInitSourceCode),
             minCapacity: 0,
             maxCapacity: 0,
             securityGroup: securityGroup,

@@ -41,6 +41,7 @@
         "typescript": "5.2.2"
     },
     "dependencies": {
-        "node-cron": "3.0.3"
+        "node-cron": "3.0.3",
+        "yaml": "2.3.4"
     }
 }

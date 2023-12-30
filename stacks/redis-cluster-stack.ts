@@ -14,6 +14,7 @@ import {
 } from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 import { join as joinPath } from 'path';
+import { NetworkLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { readFileSync } from 'fs';
 import { RemovalPolicy, Stack, StackProps, Tags } from 'aws-cdk-lib';
 
@@ -146,7 +147,7 @@ export class RedisClusterStack extends Stack {
             .replace('{{PUBLIC_KEY}}', publicKey)
             .replace('{{CREDENTIALS}}', credentials)
             .replace('{{CLUSTER_REPLICAS}}', cluster.cache.replicas.toString());
-        new AutoScalingGroup(this, 'ProxyASG', {
+        const proxyASG = new AutoScalingGroup(this, 'ProxyASG', {
             vpc,
             autoScalingGroupName: 'RedisClusterProxyASG',
             vpcSubnets: { subnetType: SubnetType.PUBLIC },
@@ -158,6 +159,11 @@ export class RedisClusterStack extends Stack {
             securityGroup: securityGroup,
             keyName: keyPair.keyName,
         });
+
+        // * add an NLB to provide a single endpoint for the cluster
+        const nlb = new NetworkLoadBalancer(this, 'NLB', { vpc });
+        const listener = nlb.addListener('Listener', { port: 6379 });
+        listener.addTargets('RedisClusterProxyTarget', { port: 6379, targets: [proxyASG] });
 
         Tags.of(this).add('costcenter', 'redis_cluster');
     }

@@ -4,7 +4,7 @@
     "cluster": {
         "cache": {
             "type": "t4g.nano",
-            "count": 1,
+            "master": 1,
             "replicas": 1
         },
         "proxy": {

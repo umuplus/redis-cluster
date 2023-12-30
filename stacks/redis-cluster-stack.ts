@@ -64,7 +64,7 @@ export class RedisClusterStack extends Stack {
         const credentials = readFileSync(`${rootFolder}/tmp/credentials`, 'utf-8');
 
         const { cluster } = packageJson;
-        const numberOfNodes = cluster.cache.count * (cluster.cache.replicas + 1);
+        const numberOfNodes = cluster.cache.master * (cluster.cache.replicas + 1);
 
         console.log(numberOfNodes, 'cache nodes will be created as', cluster.cache.type);
         console.log(cluster.proxy.count, 'proxy nodes will be created as', cluster.proxy.type);

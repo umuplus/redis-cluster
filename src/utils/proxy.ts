@@ -1,13 +1,13 @@
 import yaml from 'yaml';
 import { clusterFiles } from './config';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { getInstanceIds, getInstances } from './asg';
 import { join as joinPath } from 'path';
 import { parseRedisNodes } from './redis';
-import { writeFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 
 const envoyConfigPath = joinPath(__dirname, '..', '..', 'config', 'envoy.yaml');
-const envoyConfig = yaml.parse(envoyConfigPath);
+const envoyConfig = yaml.parse(readFileSync(envoyConfigPath, 'utf-8'));
 envoyConfig.static_resources.clusters[0].load_assignment.endpoints[0].lb_endpoints = [];
 
 export async function checkRedisClusterProxy() {
@@ -23,15 +23,21 @@ export async function checkRedisClusterProxy() {
             .filter(({ master }) => master)
             .map(({ ip }) => ip)
             .sort();
+        console.log('master node(s) :', masterNodeIps.join(','));
         if (masterNodeIps.length) {
             const existingIps = getExistingIpAddress();
             configureEnvoy(masterNodeIps);
             if (existingIps.join(',') !== masterNodeIps.join(',')) {
-                const tmpEnvoyConfigPath = `/tmp/envoy-config-${Date.now()}.yaml`;
-                writeFileSync(tmpEnvoyConfigPath, yaml.stringify(envoyConfig));
-                execSync(`sudo cp ${tmpEnvoyConfigPath} ${envoyConfigPath}`);
-                execSync('sudo service envoy restart');
-                execSync(`rm -rf ${tmpEnvoyConfigPath}`);
+                writeFileSync(envoyConfigPath, yaml.stringify(envoyConfig));
+                const checkIfEnvoyRunning = `ps aux | grep envoy | grep -v grep | awk '{print $2}'`;
+                console.log('>', checkIfEnvoyRunning);
+                const envoyRunning = execSync(checkIfEnvoyRunning).toString();
+                if (envoyRunning) {
+                    const killEnvoy = `pkill -9 envoy`;
+                    console.log('>', killEnvoy);
+                    execSync(killEnvoy);
+                }
+                spawn('envoy', [`-c ${envoyConfigPath}`], { detached: true, stdio: 'ignore' });
             }
         }
     } catch (e) {

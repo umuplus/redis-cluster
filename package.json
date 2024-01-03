@@ -1,14 +1,14 @@
 {
     "name": "redis-cluster",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "cluster": {
         "cache": {
-            "type": "t4g.nano",
+            "type": "t3.medium",
             "master": 1,
             "replicas": 1
         },
         "proxy": {
-            "type": "t4g.nano",
+            "type": "t3.medium",
             "count": 1
         }
     },

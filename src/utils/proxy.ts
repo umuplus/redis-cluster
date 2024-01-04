@@ -1,7 +1,7 @@
 import yaml from 'yaml';
 import { clusterFiles } from './config';
 import { execSync, spawn } from 'child_process';
-import { getInstanceIds, getInstances } from './asg';
+import { getCacheAutoScalingGroup, getInstanceIds, getInstances } from './asg';
 import { join as joinPath } from 'path';
 import { parseRedisNodes } from './redis';
 import { readFileSync, writeFileSync } from 'fs';
@@ -12,7 +12,10 @@ envoyConfig.static_resources.clusters[0].load_assignment.endpoints[0].lb_endpoin
 
 export async function checkRedisClusterProxy() {
     try {
-        const instanceIds = await getInstanceIds();
+        const asg = await getCacheAutoScalingGroup();
+        if (!asg) throw new Error(`Auto scaling group not found for cache nodes.`);
+
+        const instanceIds = await getInstanceIds(asg);
         const instances = await getInstances([instanceIds[0]]);
         const instance = Object.values(instances)[0];
         const clusterNodesCommand = `redis-cli -h ${instance.PrivateIpAddress} -a ${clusterFiles.password} cluster nodes`;

@@ -1,4 +1,4 @@
-import { AutoScaling } from '@aws-sdk/client-auto-scaling';
+import { AutoScaling, AutoScalingGroup } from '@aws-sdk/client-auto-scaling';
 import { clusterFiles } from './config';
 import { EC2, Instance } from '@aws-sdk/client-ec2';
 
@@ -44,8 +44,8 @@ export async function getInstances(instanceIds: string[]) {
     }, {});
 }
 
-export async function getInstanceIds() {
-    const asg = await getAutoScalingGroup();
+export async function getInstanceIds(asg?: AutoScalingGroup) {
+    if (!asg) asg = await getAutoScalingGroup();
     if (!asg || !asg.DesiredCapacity || !asg.Instances?.length) {
         if (!asg) throw new Error(`Auto scaling group not found for ${clusterFiles.nodeType}`);
         else if (!asg.DesiredCapacity) throw new Error(`Auto scaling group is disabled.`);

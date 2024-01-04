@@ -3,12 +3,12 @@
     "version": "0.0.2",
     "cluster": {
         "cache": {
-            "type": "t3.medium",
+            "type": "t3a.medium",
             "master": 1,
             "replicas": 1
         },
         "proxy": {
-            "type": "t3.medium",
+            "type": "t3a.medium",
             "count": 1
         }
     },

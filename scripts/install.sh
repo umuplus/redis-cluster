@@ -20,7 +20,7 @@ git clone https://github.com/umuplus/redis-cluster.git
 cd redis-cluster
 
 npm install
-npm run build
+# npm run build
 
 echo "starting pm2"
 pm2 startup | bash

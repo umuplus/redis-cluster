@@ -3,18 +3,18 @@
     "version": "0.0.2",
     "cluster": {
         "cache": {
-            "type": "t3a.medium",
-            "master": 1,
+            "type": "t3a.micro",
+            "master": 3,
             "replicas": 1
         },
         "proxy": {
-            "type": "t3a.medium",
+            "type": "t3a.micro",
             "count": 1
         }
     },
     "scripts": {
         "build": "tsc",
-        "clean": "rm -rf cdk.out dist tmp",
+        "clean": "rm -rf cdk.out tmp",
         "deploy": "ts-node deploy.ts",
         "cdk": "cdk"
     },

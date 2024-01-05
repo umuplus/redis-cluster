@@ -5,7 +5,6 @@
 *-firebase-admin-sdk.json
 
 coverage
-dist
 node_modules
 .cdk.staging
 cdk.out

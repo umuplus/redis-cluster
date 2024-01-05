@@ -2,13 +2,13 @@
     "name": "redis-cluster",
     "version": "0.0.2",
     "cluster": {
-        "type": "t3a.medium",
+        "type": "t3a.nano",
         "master": 3,
         "replicas": 1
     },
     "scripts": {
         "build": "tsc",
-        "clean": "rm -rf cdk.out dist tmp",
+        "clean": "rm -rf cdk.out tmp",
         "deploy": "ts-node deploy.ts",
         "cdk": "cdk"
     },

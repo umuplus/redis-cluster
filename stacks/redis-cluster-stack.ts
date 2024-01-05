@@ -3,6 +3,7 @@ import { AutoScalingGroup } from 'aws-cdk-lib/aws-autoscaling';
 import {
     CfnKeyPair,
     GenericLinuxImage,
+    Instance,
     InstanceType,
     IpAddresses,
     Peer,
@@ -14,7 +15,6 @@ import {
 } from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 import { join as joinPath } from 'path';
-import { NetworkLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { readFileSync } from 'fs';
 import { RemovalPolicy, Stack, StackProps, Tags } from 'aws-cdk-lib';
 
@@ -64,30 +64,20 @@ export class RedisClusterStack extends Stack {
         const credentials = readFileSync(`${rootFolder}/tmp/credentials`, 'utf-8');
 
         const { cluster } = packageJson;
-        const numberOfNodes = cluster.cache.master * (cluster.cache.replicas + 1);
+        if (!cluster.master || cluster.master < 3)
+            throw new Error('Redis cluster requires at least 3 master nodes');
 
-        console.log(numberOfNodes, 'cache nodes will be created as', cluster.cache.type);
-        console.log(cluster.proxy.count, 'proxy nodes will be created as', cluster.proxy.type);
+        const numberOfNodes = cluster.master * (cluster.replicas + 1);
+        console.log(numberOfNodes, 'cache nodes will be created as', cluster.type);
 
         const vpc = new Vpc(this, 'ClusterVpc', {
             ipAddresses: IpAddresses.cidr('10.0.0.0/16'),
-            natGateways: 1,
-            maxAzs: 3,
+            maxAzs: 1,
             subnetConfiguration: [
-                {
-                    name: 'private-subnet-1',
-                    subnetType: SubnetType.PRIVATE_WITH_EGRESS,
-                    cidrMask: 24,
-                },
                 {
                     name: 'public-subnet-1',
                     subnetType: SubnetType.PUBLIC,
                     cidrMask: 24,
-                },
-                {
-                    name: 'isolated-subnet-1',
-                    subnetType: SubnetType.PRIVATE_ISOLATED,
-                    cidrMask: 28,
                 },
             ],
         });
@@ -114,56 +104,25 @@ export class RedisClusterStack extends Stack {
         securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(6379));
         securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(16379));
 
-        const commonInitPath = joinPath(rootFolder, 'scripts', 'common-init.sh');
-        const commonInitSourceCode = readFileSync(commonInitPath, 'utf-8');
         const cacheInitPath = joinPath(rootFolder, 'scripts', 'cache-init.sh');
         const cacheInitSourceCode = readFileSync(cacheInitPath, 'utf-8')
-            .replace('{{COMMON}}', commonInitSourceCode)
-            .replace('{{NODE_TYPE}}', 'cache')
             .replace(/{{REDIS_PASSWORD}}/g, password)
             .replace('{{PRIVATE_KEY}}', privateKey)
             .replace('{{PUBLIC_KEY}}', publicKey)
             .replace('{{CREDENTIALS}}', credentials)
-            .replace('{{CLUSTER_REPLICAS}}', cluster.cache.replicas.toString());
-        new AutoScalingGroup(this, 'CacheASG', {
-            vpc,
-            autoScalingGroupName: 'RedisClusterCacheASG',
-            vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
-            instanceType: new InstanceType(cluster.cache.type),
-            machineImage: new GenericLinuxImage(AWS_EC2_AMI_UBUNTU_2204LTS),
-            userData: UserData.custom(cacheInitSourceCode),
-            minCapacity: 0,
-            maxCapacity: 0,
-            securityGroup: securityGroup,
-            keyName: keyPair.keyName,
-        });
+            .replace('{{CLUSTER_REPLICAS}}', cluster.replicas.toString());
 
-        const proxyInitPath = joinPath(rootFolder, 'scripts', 'proxy-init.sh');
-        const proxyInitSourceCode = readFileSync(proxyInitPath, 'utf-8')
-            .replace('{{COMMON}}', commonInitSourceCode)
-            .replace('{{NODE_TYPE}}', 'proxy')
-            .replace(/{{REDIS_PASSWORD}}/g, password)
-            .replace('{{PRIVATE_KEY}}', privateKey)
-            .replace('{{PUBLIC_KEY}}', publicKey)
-            .replace('{{CREDENTIALS}}', credentials)
-            .replace('{{CLUSTER_REPLICAS}}', cluster.cache.replicas.toString());
-        const proxyASG = new AutoScalingGroup(this, 'ProxyASG', {
-            vpc,
-            autoScalingGroupName: 'RedisClusterProxyASG',
-            vpcSubnets: { subnetType: SubnetType.PUBLIC },
-            instanceType: new InstanceType(cluster.proxy.type),
-            machineImage: new GenericLinuxImage(AWS_EC2_AMI_UBUNTU_2204LTS),
-            userData: UserData.custom(proxyInitSourceCode),
-            minCapacity: 0,
-            maxCapacity: 0,
-            securityGroup: securityGroup,
-            keyName: keyPair.keyName,
-        });
-
-        // * add an NLB to provide a single endpoint for the cluster
-        const nlb = new NetworkLoadBalancer(this, 'NLB', { vpc });
-        const listener = nlb.addListener('Listener', { port: 6379 });
-        listener.addTargets('RedisClusterProxyTarget', { port: 6379, targets: [proxyASG] });
+        for (let i = 0; i < numberOfNodes; i++)
+            new Instance(this, `RedisClusterNode${i + 1}`, {
+                instanceName: `RedisClusterNode${i + 1}`,
+                vpc,
+                vpcSubnets: { subnetType: SubnetType.PUBLIC },
+                securityGroup,
+                instanceType: new InstanceType(cluster.type),
+                machineImage: new GenericLinuxImage(AWS_EC2_AMI_UBUNTU_2204LTS),
+                keyName: keyPair.keyName,
+                userData: UserData.custom(cacheInitSourceCode),
+            });
 
         Tags.of(this).add('costcenter', 'redis_cluster');
     }

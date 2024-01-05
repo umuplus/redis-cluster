@@ -18,6 +18,7 @@ npm install -g pm2
 
 git clone https://github.com/umuplus/redis-cluster.git
 cd redis-cluster
+git checkout no-proxy
 
 npm install
 npm run build

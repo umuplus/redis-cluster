@@ -25,3 +25,13 @@ export async function getOwnerNodeIP() {
         return undefined;
     }
 }
+
+export async function putClusterInformation(info: string) {
+    console.log('saving cluster information to db');
+    await ddb.send(
+        new PutCommand({
+            TableName,
+            Item: { pk: 'CLUSTER', val: info },
+        })
+    );
+}

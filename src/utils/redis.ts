@@ -6,13 +6,13 @@ export type RedisClusterNode = {
 };
 
 export function parseRedisNodes(payload: string) {
-    const nodes = payload.split('\n');
+    const nodes = payload.split('\n').filter((node) => node);
     return nodes.reduce((final: Record<string, RedisClusterNode>, node) => {
         if (node.startsWith('Warning')) return final
 
         const [id, ipAddress, _flags, masterId, _ping, _pong, _epoch, status] = node.split(' ');
         console.log('>', id, ipAddress, _flags, masterId, _ping, _pong, _epoch, status);
-        
+
         const [ip] = ipAddress.split(':')
         final[ip] = {
             id,

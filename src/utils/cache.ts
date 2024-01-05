@@ -59,11 +59,19 @@ export async function checkRedisClusterHealth() {
             console.log('>', createClusterCommand);
             execSync(createClusterCommand, { stdio: 'inherit' });
 
-            const redisClusterStatus = execSync(redisClusterStatusCommand)
-            .toString()
-            .includes('cluster_state:ok');
+            console.log('waiting for the cluster to be ready...');
+            let clusterReadySteps = 0;
+            while (true) {
+                clusterReadySteps++;
+                await new Promise((resolve) => setTimeout(resolve, 5000));
 
-            if (!redisClusterStatus) throw new Error('Created cluster is not healthy');
+                console.log('>', redisClusterStatusCommand);
+                const redisClusterStatus = execSync(redisClusterStatusCommand)
+                    .toString()
+                    .includes('cluster_state:ok');
+                if (redisClusterStatus) break;
+                else if (clusterReadySteps > 10) throw new Error('Creating cluster failed');
+            }
         } else {
             if (Date.now() - startedAt < delay)
                 throw new Error('Give the cluster some time to start');

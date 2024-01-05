@@ -2,7 +2,7 @@
     "name": "redis-cluster",
     "version": "0.0.2",
     "cluster": {
-        "type": "t3a.nano",
+        "type": "t3a.micro",
         "master": 3,
         "replicas": 1
     },

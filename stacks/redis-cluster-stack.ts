@@ -1,5 +1,4 @@
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
-import { AutoScalingGroup } from 'aws-cdk-lib/aws-autoscaling';
 import {
     CfnKeyPair,
     GenericLinuxImage,

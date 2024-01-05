@@ -1,5 +1,5 @@
 import { clusterFiles } from './config';
-import { EC2, Instance } from '@aws-sdk/client-ec2';
+import { EC2 } from '@aws-sdk/client-ec2';
 
 const instanceName = 'RedisClusterNode';
 

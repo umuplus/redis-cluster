@@ -16,7 +16,7 @@ nvm install 18
 echo "installing pm2"
 npm install -g pm2
 
-git clone -b no-proxy https://github.com/umuplus/redis-cluster.git
+git clone https://github.com/umuplus/redis-cluster.git
 cd redis-cluster
 
 npm install

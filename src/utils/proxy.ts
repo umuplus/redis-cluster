@@ -21,6 +21,7 @@ export async function checkRedisClusterProxy() {
         const clusterNodesCommand = `redis-cli -h ${instance.PrivateIpAddress} -a ${clusterFiles.password} cluster nodes`;
         console.log('>', clusterNodesCommand);
         const nodesRaw = execSync(clusterNodesCommand).toString();
+        console.log('>', nodesRaw)
         const nodes = parseRedisNodes(nodesRaw);
         const masterNodeIps = Object.values(nodes)
             .filter(({ master }) => master)
@@ -44,6 +45,7 @@ export async function checkRedisClusterProxy() {
             }
         }
     } catch (e) {
+        console.log(e)
         console.error((e as Error).message);
     }
 }

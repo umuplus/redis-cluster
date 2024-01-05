@@ -55,9 +55,15 @@ export async function checkRedisClusterHealth() {
                 .map((node) => `${node.PrivateIpAddress}:6379`)
                 .join(' ');
             const replicaConfig = `--cluster-replicas ${clusterFiles.replicas}`;
-            const createClusterCommand = `redis-cli -a ${clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig}`;
+            const createClusterCommand = `redis-cli -a ${clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);
             execSync(createClusterCommand, { stdio: 'inherit' });
+
+            const redisClusterStatus = execSync(redisClusterStatusCommand)
+            .toString()
+            .includes('cluster_state:ok');
+
+            if (!redisClusterStatus) throw new Error('Created cluster is not healthy');
         } else {
             if (Date.now() - startedAt < delay)
                 throw new Error('Give the cluster some time to start');

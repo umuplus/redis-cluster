@@ -19,11 +19,11 @@ for (const netGroup of netGroups) {
 
 const clusterFilesPath = `${process.env.HOME}/cluster-files`;
 export const clusterFiles = {
-    password: readFileSync(`${clusterFilesPath}/password`, 'utf-8'),
+    password: readFileSync(`${clusterFilesPath}/password`, 'utf-8').trim(),
     privateKey: readFileSync(`${clusterFilesPath}/key.pem`, 'utf-8'),
     publicKey: readFileSync(`${clusterFilesPath}/key.pub`, 'utf-8'),
     credentials: JSON.parse(readFileSync(`${clusterFilesPath}/credentials.json`, 'utf-8')),
-    nodeType: readFileSync(`${clusterFilesPath}/node-type`, 'utf-8'),
-    replicas: parseInt(readFileSync(`${clusterFilesPath}/replicas`, 'utf-8')),
+    nodeType: readFileSync(`${clusterFilesPath}/node-type`, 'utf-8').trim(),
+    replicas: parseInt(readFileSync(`${clusterFilesPath}/replicas`, 'utf-8').trim()),
     ipAddress,
 };

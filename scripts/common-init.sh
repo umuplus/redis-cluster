@@ -1,5 +1,3 @@
-set -e
-
 export REDIS_CLUSTER_FILES=/home/ubuntu/cluster-files
 
 mkdir -p $REDIS_CLUSTER_FILES

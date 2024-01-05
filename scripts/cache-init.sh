@@ -1,5 +1,4 @@
 #!/bin/bash
-
 {{COMMON}}
 
 # * install redis

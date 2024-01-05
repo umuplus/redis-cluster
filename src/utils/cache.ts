@@ -53,11 +53,19 @@ export async function checkRedisClusterHealth() {
             console.log('>', createClusterCommand);
             execSync(createClusterCommand, { stdio: 'inherit' });
 
-            console.log('>', redisClusterStatusCommand);
-            const redisClusterStatus = execSync(redisClusterStatusCommand)
-                .toString()
-                .includes('cluster_state:ok');
-            if (!redisClusterStatus) throw new Error('Creating cluster failed');
+            console.log('waiting for the cluster to be ready...');
+            let clusterReadySteps = 0;
+            while (true) {
+                clusterReadySteps++;
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                console.log('>', redisClusterStatusCommand);
+                const redisClusterStatus = execSync(redisClusterStatusCommand)
+                    .toString()
+                    .includes('cluster_state:ok');
+                if (redisClusterStatus) break;
+                else if (clusterReadySteps > 10) throw new Error('Creating cluster failed');
+            }
 
             const clusterNodesCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;
             console.log('>', clusterNodesCommand);

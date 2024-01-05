@@ -8,7 +8,7 @@ export async function getInstances(): Promise<string[]> {
     const { Reservations } = await ec2.describeInstances({
         Filters: [
             { Name: 'instance-state-name', Values: ['running'] },
-            { Name: 'tag:Name', Values: [instanceName] },
+            { Name: 'tag:Name', Values: [`${instanceName}*`] },
         ],
     });
     if (!Reservations?.length) return [];

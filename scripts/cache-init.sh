@@ -48,8 +48,7 @@ sed -i -e 's/# masterauth <master-password>/masterauth {{REDIS_PASSWORD}}/g' /et
 
 # * enable cluster
 sed -i -e 's/# cluster-enabled yes/cluster-enabled yes/g' /etc/redis/redis.conf
-echo 'bind 0.0.0.0' >> /etc/redis/redis.conf
 
-service redis restart
+service redis stop
 
 runuser -l ubuntu -c 'curl -o- https://raw.githubusercontent.com/umuplus/redis-cluster/main/scripts/install.sh | bash'

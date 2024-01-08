@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 import { getInstances } from './ec2';
 import { getOwnerNodeIP, putClusterInformation, putOwnerNodeIP } from './db';
 import { parseRedisNodes } from './redis';
+import { readFileSync } from 'fs';
 
 let locked = false;
 const startedAt = Date.now();
@@ -25,7 +26,21 @@ export async function checkRedisClusterHealth() {
             .toString()
             .includes('active (running)');
         if (!redisServiceStatus) {
-            console.log('redis service is not running, restarting...');
+            console.log('redis service is not running');
+            const instances = await getInstances();
+            const myInstance = instances.find(
+                (instance) => instance.PrivateIpAddress === clusterFiles.ipAddress
+            );
+            if (!myInstance) throw new Error(`Instance ${clusterFiles.ipAddress} not found.`);
+
+            const bind = `bind ${myInstance.PublicIpAddress}`;
+            const redisConf = readFileSync('/etc/redis/redis.conf', 'utf-8');
+            if (!redisConf.includes(bind)) {
+                console.log('binding redis to', myInstance.PublicIpAddress);
+                execSync(`echo '${bind}' | sudo tee -a /etc/redis/redis.conf`);
+            }
+
+            console.log('starting redis...');
             execSync('sudo service redis restart'); // ? shutdown instead?
         }
 
@@ -49,7 +64,9 @@ export async function checkRedisClusterHealth() {
             await putOwnerNodeIP(clusterFiles.ipAddress);
 
             // * create the cluster
-            const ipPortPairs = instances.map((instance) => `${instance.PublicIpAddress}:6379`).join(' ');
+            const ipPortPairs = instances
+                .map((instance) => `${instance.PublicIpAddress}:6379`)
+                .join(' ');
             const replicaConfig = `--cluster-replicas ${clusterFiles.replicas}`;
             const createClusterCommand = `redis-cli -a ${clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);

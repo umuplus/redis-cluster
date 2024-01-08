@@ -40,8 +40,10 @@ export async function checkRedisClusterHealth() {
 
             // * check if the instances are healthy and ready for the cluster
             const instances = await getInstances();
-            if (!instances.includes(clusterFiles.ipAddress))
-                throw new Error(`Instance ${clusterFiles.ipAddress} not found.`);
+            const myInstance = instances.find(
+                (instance) => instance.PrivateIpAddress === clusterFiles.ipAddress
+            );
+            if (!myInstance) throw new Error(`Instance ${clusterFiles.ipAddress} not found.`);
 
             // * take over the owner node
             await putOwnerNodeIP(clusterFiles.ipAddress);
@@ -87,12 +89,14 @@ export async function checkRedisClusterHealth() {
                 else if (ownerIp === clusterFiles.ipAddress) {
                     // * I am the owner node. Let's check if there are new nodes in the instances
                     const instances = await getInstances();
-                    const newInstanceIps = instances.filter((ip) => !nodes[ip]);
+                    const newInstances = instances.filter(
+                        (instance) => !nodes[instance.PublicIpAddress!]
+                    );
 
                     let mustRebalance = false;
-                    if (newInstanceIps.length) {
+                    if (newInstances.length) {
                         // * add new nodes to the cluster
-                        for (const ip of newInstanceIps) {
+                        for (const ip of newInstances) {
                             const command = `redis-cli -a ${clusterFiles.password} cluster meet ${ip} 6379`;
                             console.log('>', command);
                             execSync(command).toString();
@@ -123,12 +127,14 @@ export async function checkRedisClusterHealth() {
                             // * make sure the new nodes are healthy and the unhealthy nodes are removed
                             const nodes = parseRedisNodes(execSync(clusterNodesCommand).toString());
                             const healthyNewNodes = Object.values(nodes).filter(
-                                (node) => newInstanceIps.includes(node.ip) && node.healthy
+                                (node) =>
+                                    newInstances.find((i) => i.PublicIpAddress === node.ip) &&
+                                    node.healthy
                             );
                             const notRemovedUnhealthyNodes = Object.values(nodes).filter((node) =>
                                 unhealthyNodes.find(({ id }) => id === node.id)
                             );
-                            const newNodesAdded = healthyNewNodes.length === newInstanceIps.length;
+                            const newNodesAdded = healthyNewNodes.length === newInstances.length;
                             if (newNodesAdded && !notRemovedUnhealthyNodes.length) break;
                         }
 

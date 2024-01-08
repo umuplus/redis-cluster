@@ -6,10 +6,7 @@ This is an AWS CDK stack to deploy an automatically scalable, highly available a
 
 ## How does it work?
 
-There are two *Auto Scaling Groups* in the stack.
-One of them is for managing the Redis cluster and the other one is for proxy nodes.
-An orchestration script runs on each instance and check the health of the Redis cluster periodically.
-There is a Network Load Balancer in front of the Auto Scaling Group for the proxies.
+...
 
 ## Configuration
 
@@ -23,10 +20,6 @@ You can configure some resources via package.json file.
             "type": "t4g.nano",
             "master": 1,
             "replicas": 1
-        },
-        "proxy": {
-            "type": "t4g.nano",
-            "count": 1
         }
     }
 }
@@ -34,11 +27,9 @@ You can configure some resources via package.json file.
 
 | Name                   | Description                                        | Default  |
 | ---------------------- | -------------------------------------------------- | -------: |
-| cluster.cache.type     | AWS EC2 Instance Type for cache nodes              | t4g.nano |
-| cluster.cache.master   | How many master nodes will be deployed             |        1 |
-| cluster.cache.replicas | How many replicas will be deployed for each master |        1 |
-| cluster.proxy.type     | AWS EC2 Instance Type for proxy nodes              | t4g.nano |
-| cluster.proxy.count    | How many proxy nodes will be deployed              |        1 |
+| cluster.type     | AWS EC2 Instance Type for cache nodes              | t4g.nano |
+| cluster.master   | How many master nodes will be deployed             |        1 |
+| cluster.replicas | How many replicas will be deployed for each master |        1 |
 
 ## Deployment
 

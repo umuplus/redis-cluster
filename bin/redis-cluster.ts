@@ -5,5 +5,5 @@ import { RedisClusterStack } from '../stacks/redis-cluster-stack';
 
 const app = new App();
 new RedisClusterStack(app, 'RedisClusterStack', {
-    terminationProtection: false,
+    terminationProtection: true,
 });

@@ -1,7 +1,7 @@
 import { clusterFiles } from './config';
 import { execSync } from 'child_process';
-import { getInstanceIds, getInstances } from './asg';
-import { getOwnerNodeIP, putOwnerNodeIP } from './db';
+import { getInstances } from './ec2';
+import { getOwnerNodeIP, putClusterInformation, putOwnerNodeIP } from './db';
 import { parseRedisNodes } from './redis';
 
 let locked = false;
@@ -30,7 +30,7 @@ export async function checkRedisClusterHealth() {
         }
 
         // * check redis cluster status
-        const redisClusterStatusCommand = `redis-cli cluster info`;
+        const redisClusterStatusCommand = `redis-cli -a ${clusterFiles.password} cluster info`;
         console.log('>', redisClusterStatusCommand);
         const redisClusterStatus = execSync(redisClusterStatusCommand)
             .toString()
@@ -38,24 +38,18 @@ export async function checkRedisClusterHealth() {
         if (!redisClusterStatus) {
             console.log('redis cluster is not running');
 
-            // * check if the instances in the ASG are healthy and ready for the cluster
-            const instanceIds = await getInstanceIds();
-            const instances = await getInstances(instanceIds);
-            const myInstance = Object.values(instances).find(
-                (instance) => instance.PrivateIpAddress === clusterFiles.ipAddress
-            );
-            if (!myInstance)
-                throw new Error(`Instance ${clusterFiles.ipAddress} not found in the ASG.`);
+            // * check if the instances are healthy and ready for the cluster
+            const instances = await getInstances();
+            if (!instances.includes(clusterFiles.ipAddress))
+                throw new Error(`Instance ${clusterFiles.ipAddress} not found.`);
 
             // * take over the owner node
             await putOwnerNodeIP(clusterFiles.ipAddress);
 
-            // * create the cluster with the instances in the ASG
-            const ipPortPairs = Object.values(instances)
-                .map((node) => `${node.PrivateIpAddress}:6379`)
-                .join(' ');
+            // * create the cluster
+            const ipPortPairs = instances.map((ip) => `${ip}:6379`).join(' ');
             const replicaConfig = `--cluster-replicas ${clusterFiles.replicas}`;
-            const createClusterCommand = `redis-cli --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
+            const createClusterCommand = `redis-cli -a ${clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);
             execSync(createClusterCommand, { stdio: 'inherit' });
 
@@ -72,33 +66,34 @@ export async function checkRedisClusterHealth() {
                 if (redisClusterStatus) break;
                 else if (clusterReadySteps > 10) throw new Error('Creating cluster failed');
             }
+
+            const clusterNodesCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;
+            console.log('>', clusterNodesCommand);
+            const nodesRaw = execSync(clusterNodesCommand).toString();
+            const nodes = parseRedisNodes(nodesRaw);
+            await putClusterInformation(JSON.stringify(nodes));
         } else {
             if (Date.now() - startedAt < delay)
                 throw new Error('Give the cluster some time to start');
 
             // * fetch cluster nodes
-            const clusterNodesCommand = `redis-cli cluster nodes`;
+            const clusterNodesCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;
             console.log('>', clusterNodesCommand);
             const nodesRaw = execSync(clusterNodesCommand).toString();
-            console.log(nodesRaw);
             const nodes = parseRedisNodes(nodesRaw);
             if (nodes[clusterFiles.ipAddress]?.master) {
                 const ownerIp = await getOwnerNodeIP();
                 if (!ownerIp) throw new Error('Master node IP not found in the DB');
                 else if (ownerIp === clusterFiles.ipAddress) {
-                    // * I am the owner node. Let's check if there are new nodes in the ASG
-                    const instanceIds = await getInstanceIds();
-                    const instances = await getInstances(instanceIds);
-                    const newInstanceIps = Object.values(instances)
-                        .filter(
-                            ({ PrivateIpAddress }) => PrivateIpAddress && !nodes[PrivateIpAddress]
-                        )
-                        .map(({ PrivateIpAddress }) => PrivateIpAddress!);
+                    // * I am the owner node. Let's check if there are new nodes in the instances
+                    const instances = await getInstances();
+                    const newInstanceIps = instances.filter((ip) => !nodes[ip]);
+
                     let mustRebalance = false;
                     if (newInstanceIps.length) {
                         // * add new nodes to the cluster
                         for (const ip of newInstanceIps) {
-                            const command = `redis-cli cluster meet ${ip} 6379`;
+                            const command = `redis-cli -a ${clusterFiles.password} cluster meet ${ip} 6379`;
                             console.log('>', command);
                             execSync(command).toString();
                         }
@@ -110,7 +105,7 @@ export async function checkRedisClusterHealth() {
                     if (unhealthyNodes.length) {
                         // * remove unhealthy nodes from the cluster
                         for (const { id } of unhealthyNodes) {
-                            const command = `redis-cli cluster forget ${id}`;
+                            const command = `redis-cli -a ${clusterFiles.password} cluster forget ${id}`;
                             console.log('>', command);
                             execSync(command).toString();
                         }
@@ -138,7 +133,7 @@ export async function checkRedisClusterHealth() {
                         }
 
                         // * rebalance the cluster
-                        const command = `redis-cli cluster rebalance`;
+                        const command = `redis-cli -a ${clusterFiles.password} cluster rebalance`;
                         console.log('>', command);
                         execSync(command).toString();
                     }

@@ -50,7 +50,8 @@ sed -i -e 's/# masterauth <master-password>/masterauth {{REDIS_PASSWORD}}/g' /et
 sed -i -e 's/# cluster-enabled yes/cluster-enabled yes/g' /etc/redis/redis.conf
 IP=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)
 echo 'Public IP: $IP'
-echo 'bind $IP' >> /etc/redis/redis.conf
+echo 'cluster-announce-ip $IP' >> /etc/redis/redis.conf
+echo 'bind 0.0.0.0' >> /etc/redis/redis.conf
 
 service redis restart
 

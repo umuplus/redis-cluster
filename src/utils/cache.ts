@@ -55,7 +55,7 @@ export async function checkRedisClusterHealth() {
                 .map((instance) => `${instance.PublicIpAddress}:6379`)
                 .join(' ');
             const replicaConfig = `--cluster-replicas ${clusterFiles.replicas}`;
-            const createClusterCommand = `redis-cli --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
+            const createClusterCommand = `redis-cli -a ${clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);
             execSync(createClusterCommand, { stdio: 'inherit' });
 

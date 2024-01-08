@@ -48,12 +48,20 @@ async function checkRedisClusterHealth() {
             const createClusterCommand = `redis-cli -a ${config_1.clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);
             (0, child_process_1.execSync)(createClusterCommand, { stdio: 'inherit' });
-            console.log('>', redisClusterStatusCommand);
-            const redisClusterStatus = (0, child_process_1.execSync)(redisClusterStatusCommand)
-                .toString()
-                .includes('cluster_state:ok');
-            if (!redisClusterStatus)
-                throw new Error('Creating cluster failed');
+            console.log('waiting for the cluster to be ready...');
+            let clusterReadySteps = 0;
+            while (true) {
+                clusterReadySteps++;
+                await new Promise((resolve) => setTimeout(resolve, 5000));
+                console.log('>', redisClusterStatusCommand);
+                const redisClusterStatus = (0, child_process_1.execSync)(redisClusterStatusCommand)
+                    .toString()
+                    .includes('cluster_state:ok');
+                if (redisClusterStatus)
+                    break;
+                else if (clusterReadySteps > 10)
+                    throw new Error('Creating cluster failed');
+            }
             const clusterNodesCommand = `redis-cli -a ${config_1.clusterFiles.password} cluster nodes`;
             console.log('>', clusterNodesCommand);
             const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();

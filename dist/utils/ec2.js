@@ -9,7 +9,7 @@ async function getInstances() {
     const { Reservations } = await ec2.describeInstances({
         Filters: [
             { Name: 'instance-state-name', Values: ['running'] },
-            { Name: 'tag:Name', Values: [instanceName] },
+            { Name: 'tag:Name', Values: [`${instanceName}*`] },
         ],
     });
     if (!Reservations?.length)
@@ -17,8 +17,8 @@ async function getInstances() {
     return Reservations.reduce((final, current) => {
         if (current.Instances?.length)
             for (let instance of current.Instances)
-                if (instance.PrivateIpAddress && !final.includes(instance.PrivateIpAddress))
-                    final.push(instance.PrivateIpAddress);
+                if (instance.PublicIpAddress && !final.includes(instance.PublicIpAddress))
+                    final.push(instance.PublicIpAddress);
         return final;
     }, []);
 }

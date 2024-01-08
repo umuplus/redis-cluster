@@ -78,7 +78,7 @@ async function deploy() {
 
         let password = config.REDIS_PASSWORD?.val.trim();
         const hasPassword = !!password;
-        if (!password) password = Math.random().toString(36).slice(2);
+        if (!password) password = generatePassword();
         writeFileSync(joinPath(pathTmp, 'password'), password);
         writeFileSync(joinPath(pathTmp, 'credentials'), JSON.stringify(profiles[profile]));
 
@@ -183,6 +183,10 @@ async function putSshKeysToDB(privateKey: string, publicKey: string) {
     } catch (e) {
         console.log('ssh keys not saved to db');
     }
+}
+
+function generatePassword() {
+    return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
 }
 
 deploy();

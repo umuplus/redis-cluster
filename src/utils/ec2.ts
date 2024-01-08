@@ -16,8 +16,8 @@ export async function getInstances(): Promise<string[]> {
     return Reservations.reduce((final: string[], current) => {
         if (current.Instances?.length)
             for (let instance of current.Instances)
-                if (instance.PrivateIpAddress && !final.includes(instance.PrivateIpAddress))
-                    final.push(instance.PrivateIpAddress);
+                if (instance.PublicIpAddress && !final.includes(instance.PublicIpAddress))
+                    final.push(instance.PublicIpAddress);
         return final;
     }, []);
 }

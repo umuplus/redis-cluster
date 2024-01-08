@@ -17,8 +17,9 @@ async function getInstances() {
     return Reservations.reduce((final, current) => {
         if (current.Instances?.length)
             for (let instance of current.Instances)
-                if (instance.PublicIpAddress && !final.includes(instance.PublicIpAddress))
-                    final.push(instance.PublicIpAddress);
+                if (instance.PublicIpAddress &&
+                    !final.find((i) => i.PublicIpAddress === instance.PublicIpAddress))
+                    final.push(instance);
         return final;
     }, []);
 }

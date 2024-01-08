@@ -38,7 +38,8 @@ async function checkRedisClusterHealth() {
             console.log('redis cluster is not running');
             // * check if the instances are healthy and ready for the cluster
             const instances = await (0, ec2_1.getInstances)();
-            if (!instances.includes(config_1.clusterFiles.ipAddress))
+            const myInstance = instances.find((instance) => instance.PrivateIpAddress === config_1.clusterFiles.ipAddress);
+            if (!myInstance)
                 throw new Error(`Instance ${config_1.clusterFiles.ipAddress} not found.`);
             // * take over the owner node
             await (0, db_1.putOwnerNodeIP)(config_1.clusterFiles.ipAddress);
@@ -83,11 +84,11 @@ async function checkRedisClusterHealth() {
                 else if (ownerIp === config_1.clusterFiles.ipAddress) {
                     // * I am the owner node. Let's check if there are new nodes in the instances
                     const instances = await (0, ec2_1.getInstances)();
-                    const newInstanceIps = instances.filter((ip) => !nodes[ip]);
+                    const newInstances = instances.filter((instance) => !nodes[instance.PublicIpAddress]);
                     let mustRebalance = false;
-                    if (newInstanceIps.length) {
+                    if (newInstances.length) {
                         // * add new nodes to the cluster
-                        for (const ip of newInstanceIps) {
+                        for (const ip of newInstances) {
                             const command = `redis-cli -a ${config_1.clusterFiles.password} cluster meet ${ip} 6379`;
                             console.log('>', command);
                             (0, child_process_1.execSync)(command).toString();
@@ -114,9 +115,10 @@ async function checkRedisClusterHealth() {
                             await new Promise((resolve) => setTimeout(resolve, 5000));
                             // * make sure the new nodes are healthy and the unhealthy nodes are removed
                             const nodes = (0, redis_1.parseRedisNodes)((0, child_process_1.execSync)(clusterNodesCommand).toString());
-                            const healthyNewNodes = Object.values(nodes).filter((node) => newInstanceIps.includes(node.ip) && node.healthy);
+                            const healthyNewNodes = Object.values(nodes).filter((node) => newInstances.find((i) => i.PublicIpAddress === node.ip) &&
+                                node.healthy);
                             const notRemovedUnhealthyNodes = Object.values(nodes).filter((node) => unhealthyNodes.find(({ id }) => id === node.id));
-                            const newNodesAdded = healthyNewNodes.length === newInstanceIps.length;
+                            const newNodesAdded = healthyNewNodes.length === newInstances.length;
                             if (newNodesAdded && !notRemovedUnhealthyNodes.length)
                                 break;
                         }

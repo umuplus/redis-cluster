@@ -26,5 +26,7 @@ echo "{{NODE_TYPE}}" > $REDIS_CLUSTER_FILES/node-type
 chown -Rf ubuntu:ubuntu $REDIS_CLUSTER_FILES
 chmod -Rf 755 $REDIS_CLUSTER_FILES
 
+# TODO! increase open file limit https://manishrjain.com/increase-open-file-limits-ubuntu
+
 # * update apt
 apt -y update

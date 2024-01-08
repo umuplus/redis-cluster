@@ -48,7 +48,10 @@ sed -i -e 's/# masterauth <master-password>/masterauth {{REDIS_PASSWORD}}/g' /et
 
 # * enable cluster
 sed -i -e 's/# cluster-enabled yes/cluster-enabled yes/g' /etc/redis/redis.conf
+IP=$(curl http://169.254.169.254/latest/meta-data/public-ipv4)
+echo 'Public IP: $IP'
+echo 'bind $IP' >> /etc/redis/redis.conf
 
-service redis stop
+service redis restart
 
 runuser -l ubuntu -c 'curl -o- https://raw.githubusercontent.com/umuplus/redis-cluster/main/scripts/install.sh | bash'

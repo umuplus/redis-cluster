@@ -7,6 +7,7 @@ const node_cron_1 = __importDefault(require("node-cron"));
 const cache_1 = require("./utils/cache");
 async function main() {
     // ! put a memory threshold with pm2
+    await (0, cache_1.checkRedisClusterHealth)();
     node_cron_1.default.schedule('*/5 * * * *', cache_1.checkRedisClusterHealth).start();
 }
 main();

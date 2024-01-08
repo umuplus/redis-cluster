@@ -25,7 +25,7 @@ async function checkRedisClusterHealth() {
             .toString()
             .includes('active (running)');
         if (!redisServiceStatus) {
-            console.log('redis service is not running, restarting...');
+            console.log('redis service is not running. restarting redis...');
             (0, child_process_1.execSync)('sudo service redis restart'); // ? shutdown instead?
         }
         // * check redis cluster status
@@ -44,7 +44,9 @@ async function checkRedisClusterHealth() {
             // * take over the owner node
             await (0, db_1.putOwnerNodeIP)(config_1.clusterFiles.ipAddress);
             // * create the cluster
-            const ipPortPairs = instances.map((instance) => `${instance.PublicIpAddress}:6379`).join(' ');
+            const ipPortPairs = instances
+                .map((instance) => `${instance.PublicIpAddress}:6379`)
+                .join(' ');
             const replicaConfig = `--cluster-replicas ${config_1.clusterFiles.replicas}`;
             const createClusterCommand = `redis-cli -a ${config_1.clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);

@@ -26,21 +26,7 @@ export async function checkRedisClusterHealth() {
             .toString()
             .includes('active (running)');
         if (!redisServiceStatus) {
-            console.log('redis service is not running');
-            const instances = await getInstances();
-            const myInstance = instances.find(
-                (instance) => instance.PrivateIpAddress === clusterFiles.ipAddress
-            );
-            if (!myInstance) throw new Error(`Instance ${clusterFiles.ipAddress} not found.`);
-
-            const bind = `bind ${myInstance.PublicIpAddress}`;
-            const redisConf = readFileSync('/etc/redis/redis.conf', 'utf-8');
-            if (!redisConf.includes(bind)) {
-                console.log('binding redis to', myInstance.PublicIpAddress);
-                execSync(`echo '${bind}' | sudo tee -a /etc/redis/redis.conf`);
-            }
-
-            console.log('starting redis...');
+            console.log('redis service is not running. restarting redis...');
             execSync('sudo service redis restart'); // ? shutdown instead?
         }
 

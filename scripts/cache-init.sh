@@ -28,13 +28,13 @@ chmod -Rf 755 $REDIS_CLUSTER_FILES
 chmod 400 $REDIS_CLUSTER_FILES/key.pem
 
 read -r -d '' MAX_FILES_LIMIT << EOM
-* soft     nproc          65535    
-* hard     nproc          65535   
-* soft     nofile         65535   
+* soft     nproc          65535
+* hard     nproc          65535
+* soft     nofile         65535
 * hard     nofile         65535
-root soft     nproc          65535    
-root hard     nproc          65535   
-root soft     nofile         65535   
+root soft     nproc          65535
+root hard     nproc          65535
+root soft     nofile         65535
 root hard     nofile         65535
 EOM
 echo "$MAX_FILES_LIMIT" >> /etc/security/limits.conf
@@ -54,8 +54,11 @@ sed -i -e 's/bind 127.0.0.1 ::1/# bind 127.0.0.1 ::1/g' /etc/redis/redis.conf
 # * disable protected mode, so that we can connect from outside
 sed -i -e 's/protected-mode yes/protected-mode no/g' /etc/redis/redis.conf
 
-# * enable appendonly
-sed -i -e 's/appendonly no/appendonly yes/g' /etc/redis/redis.conf
+# * disable persistence
+sed -i -e 's/save 900 1/# save 900 1/g' /etc/redis/redis.conf
+sed -i -e 's/save 300 10/# save 300 10/g' /etc/redis/redis.conf
+sed -i -e 's/save 60 10000/# save 60 10000/g' /etc/redis/redis.conf
+sed -i -e 's/#   save ""/save ""/g' /etc/redis/redis.conf
 
 # * set password
 sed -i -e 's/# requirepass foobared/requirepass {{REDIS_PASSWORD}}/g' /etc/redis/redis.conf

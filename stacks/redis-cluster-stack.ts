@@ -1,8 +1,8 @@
 import { AttributeType, BillingMode, Table } from 'aws-cdk-lib/aws-dynamodb';
+import { AutoScalingGroup } from 'aws-cdk-lib/aws-autoscaling';
 import {
     CfnKeyPair,
     GenericLinuxImage,
-    Instance,
     InstanceType,
     IpAddresses,
     Peer,
@@ -111,17 +111,18 @@ export class RedisClusterStack extends Stack {
             .replace('{{CREDENTIALS}}', credentials)
             .replace('{{CLUSTER_REPLICAS}}', cluster.replicas.toString());
 
-        for (let i = 0; i < numberOfNodes; i++)
-            new Instance(this, `RedisClusterNode${i + 1}`, {
-                instanceName: `RedisClusterNode${i + 1}`,
-                vpc,
-                vpcSubnets: { subnetType: SubnetType.PUBLIC },
-                securityGroup,
-                instanceType: new InstanceType(cluster.type),
-                machineImage: new GenericLinuxImage(AWS_EC2_AMI_UBUNTU_2204LTS),
-                keyName: keyPair.keyName,
-                userData: UserData.custom(cacheInitSourceCode),
-            });
+        new AutoScalingGroup(this, 'RedisASG', {
+            vpc,
+            securityGroup,
+            autoScalingGroupName: 'RedisASG',
+            vpcSubnets: { subnetType: SubnetType.PUBLIC },
+            instanceType: new InstanceType(cluster.type),
+            machineImage: new GenericLinuxImage(AWS_EC2_AMI_UBUNTU_2204LTS),
+            userData: UserData.custom(cacheInitSourceCode),
+            keyName: keyPair.keyName,
+            minCapacity: 0,
+            maxCapacity: 0,
+        });
 
         Tags.of(this).add('costcenter', 'redis_cluster');
     }

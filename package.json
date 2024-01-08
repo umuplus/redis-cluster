@@ -13,6 +13,7 @@
         "cdk": "cdk"
     },
     "devDependencies": {
+        "@aws-sdk/client-auto-scaling": "3.481.0",
         "@aws-sdk/client-dynamodb": "3.481.0",
         "@aws-sdk/client-ec2": "3.481.0",
         "@aws-sdk/lib-dynamodb": "3.481.0",

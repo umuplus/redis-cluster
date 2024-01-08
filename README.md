@@ -40,3 +40,8 @@ npm run deploy
 
 When you run "deploy" command, it will ask you about which AWS account you are going to deploy your stack?
 To be able to pick a suitable account, you should configure them via AWS CLI.
+
+## TODO
+
+- TLS support
+- Monitoring

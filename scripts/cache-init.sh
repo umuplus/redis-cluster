@@ -9,7 +9,6 @@ read -r -d '' REDIS_CLUSTER_PRIVATE_KEY << EOM
 EOM
 
 echo "$REDIS_CLUSTER_PRIVATE_KEY" > $REDIS_CLUSTER_FILES/key.pem
-chmod 400 $REDIS_CLUSTER_FILES/key.pem
 
 read -r -d '' REDIS_CLUSTER_PUBLIC_KEY << EOM
 {{PUBLIC_KEY}}
@@ -26,6 +25,22 @@ echo "{{CLUSTER_REPLICAS}}" > $REDIS_CLUSTER_FILES/replicas
 
 chown -Rf ubuntu:ubuntu $REDIS_CLUSTER_FILES
 chmod -Rf 755 $REDIS_CLUSTER_FILES
+chmod 400 $REDIS_CLUSTER_FILES/key.pem
+
+read -r -d '' MAX_FILES_LIMIT << EOM
+* soft     nproc          65535    
+* hard     nproc          65535   
+* soft     nofile         65535   
+* hard     nofile         65535
+root soft     nproc          65535    
+root hard     nproc          65535   
+root soft     nofile         65535   
+root hard     nofile         65535
+EOM
+echo "$MAX_FILES_LIMIT" >> /etc/security/limits.conf
+echo 'session required pam_limits.so' >> /etc/pam.d/common-session
+echo 'fs.file-max = 65535' >> /etc/sysctl.conf
+sudo sysctl -p
 
 # * update apt
 apt -y update

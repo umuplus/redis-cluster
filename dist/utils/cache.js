@@ -44,7 +44,7 @@ async function checkRedisClusterHealth() {
             // * take over the owner node
             await (0, db_1.putOwnerNodeIP)(config_1.clusterFiles.ipAddress);
             // * create the cluster
-            const ipPortPairs = instances.map((ip) => `${ip}:6379`).join(' ');
+            const ipPortPairs = instances.map((instance) => `${instance.PublicIpAddress}:6379`).join(' ');
             const replicaConfig = `--cluster-replicas ${config_1.clusterFiles.replicas}`;
             const createClusterCommand = `redis-cli -a ${config_1.clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);
@@ -88,8 +88,8 @@ async function checkRedisClusterHealth() {
                     let mustRebalance = false;
                     if (newInstances.length) {
                         // * add new nodes to the cluster
-                        for (const ip of newInstances) {
-                            const command = `redis-cli -a ${config_1.clusterFiles.password} cluster meet ${ip} 6379`;
+                        for (const instance of newInstances) {
+                            const command = `redis-cli -a ${config_1.clusterFiles.password} cluster meet ${instance.PublicIpAddress} 6379`;
                             console.log('>', command);
                             (0, child_process_1.execSync)(command).toString();
                         }

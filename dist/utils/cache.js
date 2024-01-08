@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkRedisClusterHealth = void 0;
 const config_1 = require("./config");
 const child_process_1 = require("child_process");
-const ec2_1 = require("./ec2");
+const asg_1 = require("./asg");
 const db_1 = require("./db");
 const redis_1 = require("./redis");
 let locked = false;
@@ -25,7 +25,7 @@ async function checkRedisClusterHealth() {
             .toString()
             .includes('active (running)');
         if (!redisServiceStatus) {
-            console.log('redis service is not running. restarting redis...');
+            console.log('redis service is not running, restarting...');
             (0, child_process_1.execSync)('sudo service redis restart'); // ? shutdown instead?
         }
         // * check redis cluster status
@@ -36,19 +36,20 @@ async function checkRedisClusterHealth() {
             .includes('cluster_state:ok');
         if (!redisClusterStatus) {
             console.log('redis cluster is not running');
-            // * check if the instances are healthy and ready for the cluster
-            const instances = await (0, ec2_1.getInstances)();
-            const myInstance = instances.find((instance) => instance.PrivateIpAddress === config_1.clusterFiles.ipAddress);
+            // * check if the instances in the ASG are healthy and ready for the cluster
+            const instanceIds = await (0, asg_1.getInstanceIds)();
+            const instances = await (0, asg_1.getInstances)(instanceIds);
+            const myInstance = Object.values(instances).find((instance) => instance.PrivateIpAddress === config_1.clusterFiles.ipAddress);
             if (!myInstance)
-                throw new Error(`Instance ${config_1.clusterFiles.ipAddress} not found.`);
+                throw new Error(`Instance ${config_1.clusterFiles.ipAddress} not found in the ASG.`);
             // * take over the owner node
             await (0, db_1.putOwnerNodeIP)(config_1.clusterFiles.ipAddress);
-            // * create the cluster
-            const ipPortPairs = instances
+            // * create the cluster with the instances in the ASG
+            const ipPortPairs = Object.values(instances)
                 .map((instance) => `${instance.PublicIpAddress}:6379`)
                 .join(' ');
             const replicaConfig = `--cluster-replicas ${config_1.clusterFiles.replicas}`;
-            const createClusterCommand = `redis-cli -a ${config_1.clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
+            const createClusterCommand = `redis-cli --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);
             (0, child_process_1.execSync)(createClusterCommand, { stdio: 'inherit' });
             console.log('waiting for the cluster to be ready...');
@@ -84,14 +85,17 @@ async function checkRedisClusterHealth() {
                 if (!ownerIp)
                     throw new Error('Master node IP not found in the DB');
                 else if (ownerIp === config_1.clusterFiles.ipAddress) {
-                    // * I am the owner node. Let's check if there are new nodes in the instances
-                    const instances = await (0, ec2_1.getInstances)();
-                    const newInstances = instances.filter((instance) => !nodes[instance.PublicIpAddress]);
+                    // * I am the owner node. Let's check if there are new nodes in the ASG
+                    const instanceIds = await (0, asg_1.getInstanceIds)();
+                    const instances = await (0, asg_1.getInstances)(instanceIds);
+                    const newInstanceIps = Object.values(instances)
+                        .filter(({ PublicIpAddress }) => PublicIpAddress && !nodes[PublicIpAddress])
+                        .map(({ PublicIpAddress }) => PublicIpAddress);
                     let mustRebalance = false;
-                    if (newInstances.length) {
+                    if (newInstanceIps.length) {
                         // * add new nodes to the cluster
-                        for (const instance of newInstances) {
-                            const command = `redis-cli -a ${config_1.clusterFiles.password} cluster meet ${instance.PublicIpAddress} 6379`;
+                        for (const ip of newInstanceIps) {
+                            const command = `redis-cli -a ${config_1.clusterFiles.password} cluster meet ${ip} 6379`;
                             console.log('>', command);
                             (0, child_process_1.execSync)(command).toString();
                         }
@@ -117,10 +121,9 @@ async function checkRedisClusterHealth() {
                             await new Promise((resolve) => setTimeout(resolve, 5000));
                             // * make sure the new nodes are healthy and the unhealthy nodes are removed
                             const nodes = (0, redis_1.parseRedisNodes)((0, child_process_1.execSync)(clusterNodesCommand).toString());
-                            const healthyNewNodes = Object.values(nodes).filter((node) => newInstances.find((i) => i.PublicIpAddress === node.ip) &&
-                                node.healthy);
+                            const healthyNewNodes = Object.values(nodes).filter((node) => newInstanceIps.includes(node.ip) && node.healthy);
                             const notRemovedUnhealthyNodes = Object.values(nodes).filter((node) => unhealthyNodes.find(({ id }) => id === node.id));
-                            const newNodesAdded = healthyNewNodes.length === newInstances.length;
+                            const newNodesAdded = healthyNewNodes.length === newInstanceIps.length;
                             if (newNodesAdded && !notRemovedUnhealthyNodes.length)
                                 break;
                         }

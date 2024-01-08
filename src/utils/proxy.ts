@@ -18,7 +18,7 @@ export async function checkRedisClusterProxy() {
         const instanceIds = await getInstanceIds(asg);
         const instances = await getInstances([instanceIds[0]]);
         const instance = Object.values(instances)[0];
-        const clusterNodesCommand = `redis-cli -h ${instance.PrivateIpAddress} -a ${clusterFiles.password} cluster nodes`;
+        const clusterNodesCommand = `redis-cli -h ${instance.PrivateIpAddress} cluster nodes`;
         console.log('>', clusterNodesCommand);
         const nodesRaw = execSync(clusterNodesCommand).toString();
         console.log('>', nodesRaw)

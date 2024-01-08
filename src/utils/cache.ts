@@ -30,7 +30,7 @@ export async function checkRedisClusterHealth() {
         }
 
         // * check redis cluster status
-        const redisClusterStatusCommand = `redis-cli -a ${clusterFiles.password} cluster info`;
+        const redisClusterStatusCommand = `redis-cli cluster info`;
         console.log('>', redisClusterStatusCommand);
         const redisClusterStatus = execSync(redisClusterStatusCommand)
             .toString()
@@ -55,7 +55,7 @@ export async function checkRedisClusterHealth() {
                 .map((node) => `${node.PrivateIpAddress}:6379`)
                 .join(' ');
             const replicaConfig = `--cluster-replicas ${clusterFiles.replicas}`;
-            const createClusterCommand = `redis-cli -a ${clusterFiles.password} --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
+            const createClusterCommand = `redis-cli --cluster create ${ipPortPairs} ${replicaConfig} --cluster-yes`;
             console.log('>', createClusterCommand);
             execSync(createClusterCommand, { stdio: 'inherit' });
 
@@ -77,7 +77,7 @@ export async function checkRedisClusterHealth() {
                 throw new Error('Give the cluster some time to start');
 
             // * fetch cluster nodes
-            const clusterNodesCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;
+            const clusterNodesCommand = `redis-cli cluster nodes`;
             console.log('>', clusterNodesCommand);
             const nodesRaw = execSync(clusterNodesCommand).toString();
             console.log(nodesRaw);
@@ -98,7 +98,7 @@ export async function checkRedisClusterHealth() {
                     if (newInstanceIps.length) {
                         // * add new nodes to the cluster
                         for (const ip of newInstanceIps) {
-                            const command = `redis-cli -a ${clusterFiles.password} cluster meet ${ip} 6379`;
+                            const command = `redis-cli cluster meet ${ip} 6379`;
                             console.log('>', command);
                             execSync(command).toString();
                         }
@@ -110,7 +110,7 @@ export async function checkRedisClusterHealth() {
                     if (unhealthyNodes.length) {
                         // * remove unhealthy nodes from the cluster
                         for (const { id } of unhealthyNodes) {
-                            const command = `redis-cli -a ${clusterFiles.password} cluster forget ${id}`;
+                            const command = `redis-cli cluster forget ${id}`;
                             console.log('>', command);
                             execSync(command).toString();
                         }
@@ -138,7 +138,7 @@ export async function checkRedisClusterHealth() {
                         }
 
                         // * rebalance the cluster
-                        const command = `redis-cli -a ${clusterFiles.password} cluster rebalance`;
+                        const command = `redis-cli cluster rebalance`;
                         console.log('>', command);
                         execSync(command).toString();
                     }

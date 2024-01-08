@@ -14,8 +14,8 @@ sed -i -e 's/protected-mode yes/protected-mode no/g' /etc/redis/redis.conf
 sed -i -e 's/appendonly no/appendonly yes/g' /etc/redis/redis.conf
 
 # * set password
-sed -i -e 's/# requirepass foobared/requirepass {{REDIS_PASSWORD}}/g' /etc/redis/redis.conf
-sed -i -e 's/# masterauth <master-password>/masterauth {{REDIS_PASSWORD}}/g' /etc/redis/redis.conf
+# sed -i -e 's/# requirepass foobared/requirepass {{REDIS_PASSWORD}}/g' /etc/redis/redis.conf
+# sed -i -e 's/# masterauth <master-password>/masterauth {{REDIS_PASSWORD}}/g' /etc/redis/redis.conf
 
 # * enable cluster
 sed -i -e 's/# cluster-enabled yes/cluster-enabled yes/g' /etc/redis/redis.conf

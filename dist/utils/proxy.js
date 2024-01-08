@@ -5,7 +5,6 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkRedisClusterProxy = void 0;
 const yaml_1 = __importDefault(require("yaml"));
-const config_1 = require("./config");
 const child_process_1 = require("child_process");
 const asg_1 = require("./asg");
 const path_1 = require("path");
@@ -22,7 +21,7 @@ async function checkRedisClusterProxy() {
         const instanceIds = await (0, asg_1.getInstanceIds)(asg);
         const instances = await (0, asg_1.getInstances)([instanceIds[0]]);
         const instance = Object.values(instances)[0];
-        const clusterNodesCommand = `redis-cli -h ${instance.PrivateIpAddress} -a ${config_1.clusterFiles.password} cluster nodes`;
+        const clusterNodesCommand = `redis-cli -h ${instance.PrivateIpAddress} cluster nodes`;
         console.log('>', clusterNodesCommand);
         const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
         console.log('>', nodesRaw);

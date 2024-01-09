@@ -73,12 +73,6 @@ export async function checkRedisClusterHealth() {
                 if (redisClusterStatus) break;
                 else if (clusterReadySteps > 10) throw new Error('Creating cluster failed');
             }
-
-            const clusterNodesCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;
-            console.log('>', clusterNodesCommand);
-            const nodesRaw = execSync(clusterNodesCommand).toString();
-            const nodes = parseRedisNodes(nodesRaw);
-            await putClusterInformation(JSON.stringify(nodes));
         } else {
             if (!sourceCodeLastUpdatedAt || Date.now() - sourceCodeLastUpdatedAt > delay) {
                 // * git pull
@@ -97,18 +91,31 @@ export async function checkRedisClusterHealth() {
                 }
             }
 
+            const instanceIds = await getInstanceIds();
+            const instances = await getInstances(instanceIds);
+            const myInstance = Object.values(instances).find(
+                (instance) => instance.PrivateIpAddress === clusterFiles.ipAddress
+            );
+            if (!myInstance)
+                throw new Error(`Instance ${clusterFiles.ipAddress} not found in the ASG.`);
+
+            const myPublicIp = myInstance.PublicIpAddress!;
+
             // * fetch cluster nodes
             const clusterNodesCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;
             console.log('>', clusterNodesCommand);
             const nodesRaw = execSync(clusterNodesCommand).toString();
             const nodes = parseRedisNodes(nodesRaw);
-            if (nodes[clusterFiles.ipAddress]?.master) {
+            if (nodes[myPublicIp]?.master) {
                 const ownerIp = await getOwnerNodeIP();
                 if (!ownerIp) throw new Error('Master node IP not found in the DB');
-                else if (ownerIp === clusterFiles.ipAddress) {
+
+                const ownerInstance = Object.values(instances).find(
+                    (instance) => instance.PrivateIpAddress === ownerIp
+                );
+                if (!ownerInstance) throw new Error(`Owner Instance ${ownerIp} not found in the ASG.`);
+                if (ownerIp === clusterFiles.ipAddress) {
                     // * I am the owner node. Let's check if there are new nodes in the ASG
-                    const instanceIds = await getInstanceIds();
-                    const instances = await getInstances(instanceIds);
                     const newInstanceIps = Object.values(instances)
                         .filter(({ PublicIpAddress }) => PublicIpAddress && !nodes[PublicIpAddress])
                         .map(({ PublicIpAddress }) => PublicIpAddress!);
@@ -118,7 +125,7 @@ export async function checkRedisClusterHealth() {
                         for (const ip of newInstanceIps) {
                             const command = `redis-cli -a ${clusterFiles.password} cluster meet ${ip} 6379`;
                             console.log('>', command);
-                            execSync(command).toString();
+                            execSync(command);
                         }
                         mustRebalance = true;
                     }
@@ -130,7 +137,7 @@ export async function checkRedisClusterHealth() {
                         for (const { id } of unhealthyNodes) {
                             const command = `redis-cli -a ${clusterFiles.password} cluster forget ${id}`;
                             console.log('>', command);
-                            execSync(command).toString();
+                            execSync(command);
                         }
                         mustRebalance = true;
                     }
@@ -162,7 +169,7 @@ export async function checkRedisClusterHealth() {
                     }
                 } else {
                     // * Check if the owner node is healthy
-                    if (!nodes[ownerIp]?.healthy) {
+                    if (!nodes[ownerInstance.PublicIpAddress!]?.healthy) {
                         console.log(
                             `Master node ${ownerIp} is not healthy. I am trying to take over.`
                         );

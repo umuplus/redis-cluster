@@ -66,11 +66,6 @@ async function checkRedisClusterHealth() {
                 else if (clusterReadySteps > 10)
                     throw new Error('Creating cluster failed');
             }
-            const clusterNodesCommand = `redis-cli -a ${config_1.clusterFiles.password} cluster nodes`;
-            console.log('>', clusterNodesCommand);
-            const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
-            const nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
-            await (0, db_1.putClusterInformation)(JSON.stringify(nodes));
         }
         else {
             if (!sourceCodeLastUpdatedAt || Date.now() - sourceCodeLastUpdatedAt > delay) {
@@ -89,19 +84,26 @@ async function checkRedisClusterHealth() {
                     return;
                 }
             }
+            const instanceIds = await (0, asg_1.getInstanceIds)();
+            const instances = await (0, asg_1.getInstances)(instanceIds);
+            const myInstance = Object.values(instances).find((instance) => instance.PrivateIpAddress === config_1.clusterFiles.ipAddress);
+            if (!myInstance)
+                throw new Error(`Instance ${config_1.clusterFiles.ipAddress} not found in the ASG.`);
+            const myPublicIp = myInstance.PublicIpAddress;
             // * fetch cluster nodes
             const clusterNodesCommand = `redis-cli -a ${config_1.clusterFiles.password} cluster nodes`;
             console.log('>', clusterNodesCommand);
             const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
             const nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
-            if (nodes[config_1.clusterFiles.ipAddress]?.master) {
+            if (nodes[myPublicIp]?.master) {
                 const ownerIp = await (0, db_1.getOwnerNodeIP)();
                 if (!ownerIp)
                     throw new Error('Master node IP not found in the DB');
-                else if (ownerIp === config_1.clusterFiles.ipAddress) {
+                const ownerInstance = Object.values(instances).find((instance) => instance.PrivateIpAddress === ownerIp);
+                if (!ownerInstance)
+                    throw new Error(`Owner Instance ${ownerIp} not found in the ASG.`);
+                if (ownerIp === config_1.clusterFiles.ipAddress) {
                     // * I am the owner node. Let's check if there are new nodes in the ASG
-                    const instanceIds = await (0, asg_1.getInstanceIds)();
-                    const instances = await (0, asg_1.getInstances)(instanceIds);
                     const newInstanceIps = Object.values(instances)
                         .filter(({ PublicIpAddress }) => PublicIpAddress && !nodes[PublicIpAddress])
                         .map(({ PublicIpAddress }) => PublicIpAddress);
@@ -111,7 +113,7 @@ async function checkRedisClusterHealth() {
                         for (const ip of newInstanceIps) {
                             const command = `redis-cli -a ${config_1.clusterFiles.password} cluster meet ${ip} 6379`;
                             console.log('>', command);
-                            (0, child_process_1.execSync)(command).toString();
+                            (0, child_process_1.execSync)(command);
                         }
                         mustRebalance = true;
                     }
@@ -122,7 +124,7 @@ async function checkRedisClusterHealth() {
                         for (const { id } of unhealthyNodes) {
                             const command = `redis-cli -a ${config_1.clusterFiles.password} cluster forget ${id}`;
                             console.log('>', command);
-                            (0, child_process_1.execSync)(command).toString();
+                            (0, child_process_1.execSync)(command);
                         }
                         mustRebalance = true;
                     }
@@ -149,7 +151,7 @@ async function checkRedisClusterHealth() {
                 }
                 else {
                     // * Check if the owner node is healthy
-                    if (!nodes[ownerIp]?.healthy) {
+                    if (!nodes[ownerInstance.PublicIpAddress]?.healthy) {
                         console.log(`Master node ${ownerIp} is not healthy. I am trying to take over.`);
                         try {
                             await (0, db_1.putOwnerNodeIP)(config_1.clusterFiles.ipAddress, ownerIp);

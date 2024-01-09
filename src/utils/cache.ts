@@ -1,12 +1,13 @@
 import { clusterFiles } from './config';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { getInstanceIds, getInstances } from './asg';
 import { getOwnerNodeIP, putClusterInformation, putOwnerNodeIP } from './db';
 import { parseRedisNodes } from './redis';
 
 let locked = false;
-const startedAt = Date.now();
-const delay = 60000 * 10; // * 10 minutes
+const delay = 60000 * 15; // * 15 minutes
+
+let sourceCodeLastUpdatedAt: number | undefined;
 
 export async function checkRedisClusterHealth() {
     try {
@@ -79,8 +80,22 @@ export async function checkRedisClusterHealth() {
             const nodes = parseRedisNodes(nodesRaw);
             await putClusterInformation(JSON.stringify(nodes));
         } else {
-            if (Date.now() - startedAt < delay)
-                throw new Error('Give the cluster some time to start');
+            if (!sourceCodeLastUpdatedAt || Date.now() - sourceCodeLastUpdatedAt > delay) {
+                // * git pull
+                const gitPullCommand = 'git pull';
+                console.log('>', gitPullCommand);
+                const sourceCodeChange = execSync(gitPullCommand).toString();
+                if (!sourceCodeChange.includes('Already up to date.')) {
+                    sourceCodeLastUpdatedAt = Date.now();
+                    if (sourceCodeChange.includes('package.json')) {
+                        console.log('package.json is updated, installing dependencies...');
+                        execSync('npm install');
+                    }
+                    console.log('Source code is updated, restarting...');
+                    spawn('pm2', [`restart all`], { detached: true, stdio: 'ignore' });
+                    return;
+                }
+            }
 
             // * fetch cluster nodes
             const clusterNodesCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;

@@ -7,8 +7,8 @@ const asg_1 = require("./asg");
 const db_1 = require("./db");
 const redis_1 = require("./redis");
 let locked = false;
-const startedAt = Date.now();
-const delay = 60000 * 10; // * 10 minutes
+const delay = 60000 * 15; // * 15 minutes
+let sourceCodeLastUpdatedAt;
 async function checkRedisClusterHealth() {
     try {
         if (locked) {
@@ -73,8 +73,22 @@ async function checkRedisClusterHealth() {
             await (0, db_1.putClusterInformation)(JSON.stringify(nodes));
         }
         else {
-            if (Date.now() - startedAt < delay)
-                throw new Error('Give the cluster some time to start');
+            if (!sourceCodeLastUpdatedAt || Date.now() - sourceCodeLastUpdatedAt > delay) {
+                // * git pull
+                const gitPullCommand = 'git pull';
+                console.log('>', gitPullCommand);
+                const sourceCodeChange = (0, child_process_1.execSync)(gitPullCommand).toString();
+                if (!sourceCodeChange.includes('Already up to date.')) {
+                    sourceCodeLastUpdatedAt = Date.now();
+                    if (sourceCodeChange.includes('package.json')) {
+                        console.log('package.json is updated, installing dependencies...');
+                        (0, child_process_1.execSync)('npm install');
+                    }
+                    console.log('Source code is updated, restarting...');
+                    (0, child_process_1.spawn)('pm2', [`restart all`], { detached: true, stdio: 'ignore' });
+                    return;
+                }
+            }
             // * fetch cluster nodes
             const clusterNodesCommand = `redis-cli -a ${config_1.clusterFiles.password} cluster nodes`;
             console.log('>', clusterNodesCommand);

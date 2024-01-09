@@ -25,7 +25,7 @@ echo "{{CLUSTER_REPLICAS}}" > $REDIS_CLUSTER_FILES/replicas
 
 chown -Rf ubuntu:ubuntu $REDIS_CLUSTER_FILES
 chmod -Rf 755 $REDIS_CLUSTER_FILES
-chmod 400 $REDIS_CLUSTER_FILES/key.pem
+chmod 400 $REDIS_CLUSTER_FILES/key.*
 
 read -r -d '' MAX_FILES_LIMIT << EOM
 * soft     nproc          65535

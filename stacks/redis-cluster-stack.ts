@@ -14,9 +14,16 @@ import {
 } from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 import { join as joinPath } from 'path';
-import { NetworkLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import {
+    NetworkListenerAction,
+    NetworkLoadBalancer,
+    NetworkTargetGroup,
+    TargetType,
+} from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { readFileSync } from 'fs';
 import { RemovalPolicy, Stack, StackProps, Tags } from 'aws-cdk-lib';
+import { InstanceTarget } from 'aws-cdk-lib/aws-elasticloadbalancing';
+import { IpTarget } from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 
 const AWS_EC2_AMI_UBUNTU_2204LTS: Record<string, string> = {
     'af-south-1': 'ami-0e878fcddf2937686',
@@ -104,15 +111,28 @@ export class RedisClusterStack extends Stack {
         securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(6379));
         securityGroup.addIngressRule(Peer.anyIpv4(), Port.tcp(16379));
 
+        const nlb = new NetworkLoadBalancer(this, 'NLB', { vpc, internetFacing: true });
+        const targetGroup = new NetworkTargetGroup(this, 'TargetGroup', {
+            vpc,
+            port: 6379,
+            targetType: TargetType.IP,
+        });
+        nlb.addListener('Listener', {
+            port: 6379,
+            defaultAction: NetworkListenerAction.forward([targetGroup]),
+        });
+
         const cacheInitPath = joinPath(rootFolder, 'scripts', 'cache-init.sh');
         const cacheInitSourceCode = readFileSync(cacheInitPath, 'utf-8')
             .replace(/{{REDIS_PASSWORD}}/g, password)
             .replace('{{PRIVATE_KEY}}', privateKey)
             .replace('{{PUBLIC_KEY}}', publicKey)
             .replace('{{CREDENTIALS}}', credentials)
+            .replace('{{NLB_ARN}}', nlb.loadBalancerArn)
+            .replace('{{TARGET_GROUP_ARN}}', targetGroup.targetGroupArn)
             .replace('{{CLUSTER_REPLICAS}}', cluster.replicas.toString());
 
-        const asg = new AutoScalingGroup(this, 'RedisASG', {
+        new AutoScalingGroup(this, 'RedisASG', {
             vpc,
             securityGroup,
             autoScalingGroupName: 'RedisASG',
@@ -124,10 +144,6 @@ export class RedisClusterStack extends Stack {
             minCapacity: 0,
             maxCapacity: 0,
         });
-
-        const nlb = new NetworkLoadBalancer(this, 'NLB', { vpc, internetFacing: true });
-        const listener = nlb.addListener('Listener', { port: 6379 });
-        listener.addTargets('RedisClusterProxyTarget', { port: 6379, targets: [asg] });
 
         Tags.of(this).add('costcenter', 'redis_cluster');
     }

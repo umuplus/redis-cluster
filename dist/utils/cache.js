@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkRedisClusterHealth = void 0;
+const nlb_1 = require("./nlb");
 const config_1 = require("./config");
 const child_process_1 = require("child_process");
 const asg_1 = require("./asg");
@@ -66,6 +67,15 @@ async function checkRedisClusterHealth() {
                 else if (clusterReadySteps > 10)
                     throw new Error('Creating cluster failed');
             }
+            const clusterNodesCommand = `redis-cli -a ${config_1.clusterFiles.password} cluster nodes`;
+            console.log('>', clusterNodesCommand);
+            const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
+            const nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
+            const masterIps = Object.values(nodes)
+                .filter((node) => node.master)
+                .map(({ ip }) => ip);
+            if (masterIps.length)
+                await (0, nlb_1.addMasterIpAddressesToLoadBalancer)(masterIps);
         }
         else {
             if (!sourceCodeLastUpdatedAt || Date.now() - sourceCodeLastUpdatedAt > delay) {
@@ -94,7 +104,7 @@ async function checkRedisClusterHealth() {
             const clusterNodesCommand = `redis-cli -a ${config_1.clusterFiles.password} cluster nodes`;
             console.log('>', clusterNodesCommand);
             const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
-            const nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
+            let nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
             if (nodes[myPublicIp]?.master) {
                 const ownerIp = await (0, db_1.getOwnerNodeIP)();
                 if (!ownerIp)
@@ -136,7 +146,7 @@ async function checkRedisClusterHealth() {
                                 break;
                             await new Promise((resolve) => setTimeout(resolve, 5000));
                             // * make sure the new nodes are healthy and the unhealthy nodes are removed
-                            const nodes = (0, redis_1.parseRedisNodes)((0, child_process_1.execSync)(clusterNodesCommand).toString());
+                            nodes = (0, redis_1.parseRedisNodes)((0, child_process_1.execSync)(clusterNodesCommand).toString());
                             const healthyNewNodes = Object.values(nodes).filter((node) => newInstanceIps.includes(node.ip) && node.healthy);
                             const notRemovedUnhealthyNodes = Object.values(nodes).filter((node) => unhealthyNodes.find(({ id }) => id === node.id));
                             const newNodesAdded = healthyNewNodes.length === newInstanceIps.length;
@@ -148,6 +158,23 @@ async function checkRedisClusterHealth() {
                         console.log('>', command);
                         (0, child_process_1.execSync)(command).toString();
                     }
+                    const targetGroupIps = await (0, nlb_1.getTargetGroupIpAddresses)();
+                    // * detect new healthy nodes master nodes and add them to the load balancer
+                    const newHealthyIps = Object.values(nodes)
+                        .filter(({ master, healthy, ip }) => master && healthy && !targetGroupIps.includes(ip))
+                        .map(({ ip }) => ip);
+                    if (newHealthyIps.length)
+                        await (0, nlb_1.addMasterIpAddressesToLoadBalancer)(newHealthyIps);
+                    // * detect unhealthy nodes and remove them from the load balancer
+                    const existingUnhealthyIps = targetGroupIps.filter((ip) => !nodes[ip] || !nodes[ip].healthy);
+                    Object.values(nodes)
+                        .filter(({ healthy }) => !healthy)
+                        .forEach(({ ip }) => {
+                        if (!existingUnhealthyIps.includes(ip))
+                            existingUnhealthyIps.push(ip);
+                    });
+                    if (existingUnhealthyIps.length)
+                        await (0, nlb_1.removeMasterIpAddressesFromLoadBalancer)(existingUnhealthyIps);
                 }
                 else {
                     // * Check if the owner node is healthy

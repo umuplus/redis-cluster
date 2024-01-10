@@ -5,8 +5,9 @@ const client_auto_scaling_1 = require("@aws-sdk/client-auto-scaling");
 const config_1 = require("./config");
 const client_ec2_1 = require("@aws-sdk/client-ec2");
 const AUTO_SCALING_GROUP_NAME = 'RedisASG';
+const autoScaling = new client_auto_scaling_1.AutoScaling(config_1.clusterFiles.credentials);
+const ec2 = new client_ec2_1.EC2(config_1.clusterFiles.credentials);
 async function getAutoScalingGroup() {
-    const autoScaling = new client_auto_scaling_1.AutoScaling(config_1.clusterFiles.credentials);
     const result = await autoScaling.describeAutoScalingGroups({
         AutoScalingGroupNames: [AUTO_SCALING_GROUP_NAME],
     });
@@ -16,7 +17,6 @@ async function getAutoScalingGroup() {
 async function getInstances(instanceIds) {
     if (!instanceIds.length)
         return {};
-    const ec2 = new client_ec2_1.EC2(config_1.clusterFiles.credentials);
     const { Reservations } = await ec2.describeInstances({ InstanceIds: instanceIds });
     if (!Reservations?.length)
         return {};

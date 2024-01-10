@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.putClusterInformation = exports.getOwnerNodeIP = exports.putOwnerNodeIP = void 0;
+exports.getOwnerNodeIP = exports.putOwnerNodeIP = void 0;
 const config_1 = require("./config");
 const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
 const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
@@ -26,11 +26,3 @@ async function getOwnerNodeIP() {
     }
 }
 exports.getOwnerNodeIP = getOwnerNodeIP;
-async function putClusterInformation(info) {
-    console.log('saving cluster information to db');
-    await ddb.send(new lib_dynamodb_1.PutCommand({
-        TableName,
-        Item: { pk: 'CLUSTER', val: info },
-    }));
-}
-exports.putClusterInformation = putClusterInformation;

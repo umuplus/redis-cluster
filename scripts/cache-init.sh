@@ -20,8 +20,10 @@ read -r -d '' CREDENTIALS << EOM
 EOM
 echo "$CREDENTIALS" > $REDIS_CLUSTER_FILES/credentials.json
 
-echo "{{REDIS_PASSWORD}}" > $REDIS_CLUSTER_FILES/password
 echo "{{CLUSTER_REPLICAS}}" > $REDIS_CLUSTER_FILES/replicas
+echo "{{NLB_ARN}}" > $REDIS_CLUSTER_FILES/nlb
+echo "{{REDIS_PASSWORD}}" > $REDIS_CLUSTER_FILES/password
+echo "{{TARGET_GROUP_ARN}}" > $REDIS_CLUSTER_FILES/target-group
 
 chown -Rf ubuntu:ubuntu $REDIS_CLUSTER_FILES
 chmod -Rf 755 $REDIS_CLUSTER_FILES

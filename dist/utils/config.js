@@ -25,5 +25,7 @@ exports.clusterFiles = {
     publicKey: (0, fs_1.readFileSync)(`${clusterFilesPath}/key.pub`, 'utf-8'),
     credentials: JSON.parse((0, fs_1.readFileSync)(`${clusterFilesPath}/credentials.json`, 'utf-8')),
     replicas: parseInt((0, fs_1.readFileSync)(`${clusterFilesPath}/replicas`, 'utf-8').trim()),
+    nlb: (0, fs_1.readFileSync)(`${clusterFilesPath}/nlb`, 'utf-8').trim(),
+    targetGroup: (0, fs_1.readFileSync)(`${clusterFilesPath}/target-group`, 'utf-8').trim(),
     ipAddress,
 };

@@ -47,7 +47,8 @@ export async function checkRedisClusterHealth() {
             // * check if the instances in the ASG are healthy and ready for the cluster
             const instanceIds = await getInstanceIds();
             const instances = await getInstances(instanceIds);
-            const myInstance = Object.values(instances).find(
+            const instanceList = Object.values(instances);
+            const myInstance = instanceList.find(
                 (instance) => instance.PrivateIpAddress === clusterFiles.ipAddress
             );
             if (!myInstance)
@@ -57,7 +58,7 @@ export async function checkRedisClusterHealth() {
             await putOwnerNodeIP(clusterFiles.ipAddress);
 
             // * create the cluster with the instances in the ASG
-            const ipPortPairs = Object.values(instances)
+            const ipPortPairs = instanceList
                 .map((instance) => `${instance.PublicIpAddress}:6379`)
                 .join(' ');
             const replicaConfig = `--cluster-replicas ${clusterFiles.replicas}`;
@@ -83,9 +84,8 @@ export async function checkRedisClusterHealth() {
             console.log('>', clusterNodesCommand);
             const nodesRaw = execSync(clusterNodesCommand).toString();
             const nodes = parseRedisNodes(nodesRaw);
-            const masterIps = Object.values(nodes)
-                .filter((node) => node.master)
-                .map(({ ip }) => ip);
+            const nodeList = Object.values(nodes);
+            const masterIps = nodeList.filter((node) => node.master).map(({ ip }) => ip);
             if (masterIps.length) await addMasterIpAddressesToLoadBalancer(masterIps);
         } else {
             if (!sourceCodeLastUpdatedAt || Date.now() - sourceCodeLastUpdatedAt > delay) {
@@ -107,7 +107,8 @@ export async function checkRedisClusterHealth() {
 
             const instanceIds = await getInstanceIds();
             const instances = await getInstances(instanceIds);
-            const myInstance = Object.values(instances).find(
+            const instanceList = Object.values(instances);
+            const myInstance = instanceList.find(
                 (instance) => instance.PrivateIpAddress === clusterFiles.ipAddress
             );
             if (!myInstance)
@@ -120,18 +121,19 @@ export async function checkRedisClusterHealth() {
             console.log('>', clusterNodesCommand);
             const nodesRaw = execSync(clusterNodesCommand).toString();
             let nodes = parseRedisNodes(nodesRaw);
+            let nodeList = Object.values(nodes);
             if (nodes[myPublicIp]?.master) {
                 const ownerIp = await getOwnerNodeIP();
                 if (!ownerIp) throw new Error('Master node IP not found in the DB');
 
-                const ownerInstance = Object.values(instances).find(
+                const ownerInstance = instanceList.find(
                     (instance) => instance.PrivateIpAddress === ownerIp
                 );
                 if (!ownerInstance)
                     throw new Error(`Owner Instance ${ownerIp} not found in the ASG.`);
                 if (ownerIp === clusterFiles.ipAddress) {
                     // * I am the owner node. Let's check if there are new nodes in the ASG
-                    const newInstanceIps = Object.values(instances)
+                    const newInstanceIps = instanceList
                         .filter(({ PublicIpAddress }) => PublicIpAddress && !nodes[PublicIpAddress])
                         .map(({ PublicIpAddress }) => PublicIpAddress!);
                     let mustRebalance = false;
@@ -146,7 +148,7 @@ export async function checkRedisClusterHealth() {
                     }
 
                     // * Check if there are unhealthy nodes in the cluster
-                    const unhealthyNodes = Object.values(nodes).filter(({ healthy }) => !healthy);
+                    const unhealthyNodes = nodeList.filter(({ healthy }) => !healthy);
                     if (unhealthyNodes.length) {
                         // * remove unhealthy nodes from the cluster
                         for (const { id } of unhealthyNodes) {
@@ -167,6 +169,7 @@ export async function checkRedisClusterHealth() {
 
                             // * make sure the new nodes are healthy and the unhealthy nodes are removed
                             nodes = parseRedisNodes(execSync(clusterNodesCommand).toString());
+                            nodeList = Object.values(nodes);
                             const healthyNewNodes = Object.values(nodes).filter(
                                 (node) => newInstanceIps.includes(node.ip) && node.healthy
                             );
@@ -186,12 +189,17 @@ export async function checkRedisClusterHealth() {
                     const targetGroupIps = await getTargetGroupIpAddresses();
 
                     // * detect new healthy nodes master nodes and add them to the load balancer
-                    const newHealthyIps = Object.values(nodes)
+                    const newHealthyIps = nodeList
                         .filter(
                             ({ master, healthy, ip }) =>
                                 master && healthy && !targetGroupIps.includes(ip)
                         )
-                        .map(({ ip }) => ip);
+                        .map(
+                            ({ ip }) =>
+                                instanceList.find((instance) => instance.PublicIpAddress === ip)
+                                    ?.PrivateIpAddress!
+                        )
+                        .filter((ip) => ip);
                     if (newHealthyIps.length)
                         await addMasterIpAddressesToLoadBalancer(newHealthyIps);
 
@@ -199,10 +207,14 @@ export async function checkRedisClusterHealth() {
                     const existingUnhealthyIps = targetGroupIps.filter(
                         (ip) => !nodes[ip] || !nodes[ip].healthy
                     );
-                    Object.values(nodes)
+                    nodeList
                         .filter(({ healthy }) => !healthy)
                         .forEach(({ ip }) => {
-                            if (!existingUnhealthyIps.includes(ip)) existingUnhealthyIps.push(ip);
+                            const privateIp = instanceList.find(
+                                (instance) => instance.PublicIpAddress === ip
+                            )?.PrivateIpAddress;
+                            if (privateIp && !existingUnhealthyIps.includes(privateIp))
+                                existingUnhealthyIps.push(privateIp);
                         });
                     if (existingUnhealthyIps.length)
                         await removeMasterIpAddressesFromLoadBalancer(existingUnhealthyIps);

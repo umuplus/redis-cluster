@@ -22,6 +22,7 @@ export async function getTargetGroupIpAddresses() {
 }
 
 export async function addMasterIpAddressesToLoadBalancer(ipAddresses: string[]) {
+    console.log('Adding master ip addresses to load balancer', ipAddresses.join(', '));
     await elb.registerTargets({
         TargetGroupArn: clusterFiles.targetGroup,
         Targets: ipAddresses.map((ipAddress) => ({
@@ -32,6 +33,7 @@ export async function addMasterIpAddressesToLoadBalancer(ipAddresses: string[]) 
 }
 
 export async function removeMasterIpAddressesFromLoadBalancer(ipAddresses: string[]) {
+    console.log('Removing master ip addresses from load balancer', ipAddresses.join(', '));
     await elb.deregisterTargets({
         TargetGroupArn: clusterFiles.targetGroup,
         Targets: ipAddresses.map((ipAddress) => ({

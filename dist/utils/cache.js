@@ -73,7 +73,11 @@ async function checkRedisClusterHealth() {
             const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
             const nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
             const nodeList = Object.values(nodes);
-            const masterIps = nodeList.filter((node) => node.master).map(({ ip }) => ip);
+            const masterIps = nodeList
+                .filter((node) => node.master)
+                .map(({ ip }) => instanceList.find((instance) => instance.PublicIpAddress === ip)
+                ?.PrivateIpAddress)
+                .filter((ip) => ip);
             if (masterIps.length)
                 await (0, nlb_1.addMasterIpAddressesToLoadBalancer)(masterIps);
         }

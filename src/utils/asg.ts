@@ -4,8 +4,10 @@ import { EC2, Instance } from '@aws-sdk/client-ec2';
 
 const AUTO_SCALING_GROUP_NAME = 'RedisASG';
 
+const autoScaling = new AutoScaling(clusterFiles.credentials);
+const ec2 = new EC2(clusterFiles.credentials);
+
 async function getAutoScalingGroup() {
-    const autoScaling = new AutoScaling(clusterFiles.credentials);
     const result = await autoScaling.describeAutoScalingGroups({
         AutoScalingGroupNames: [AUTO_SCALING_GROUP_NAME],
     });
@@ -16,7 +18,6 @@ async function getAutoScalingGroup() {
 export async function getInstances(instanceIds: string[]) {
     if (!instanceIds.length) return {};
 
-    const ec2 = new EC2(clusterFiles.credentials);
     const { Reservations } = await ec2.describeInstances({ InstanceIds: instanceIds });
     if (!Reservations?.length) return {};
 

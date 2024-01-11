@@ -73,6 +73,7 @@ async function checkRedisClusterHealth() {
             const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
             const nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
             const nodeList = Object.values(nodes);
+            // * detect master nodes and add them to the load balancer
             const masterIps = nodeList
                 .filter((node) => node.master)
                 .map(({ ip }) => instanceList.find((instance) => instance.PublicIpAddress === ip)
@@ -166,16 +167,22 @@ async function checkRedisClusterHealth() {
                         (0, child_process_1.execSync)(command).toString();
                     }
                     const targetGroupIps = await (0, nlb_1.getTargetGroupIpAddresses)();
-                    // * detect new healthy nodes master nodes and add them to the load balancer
+                    console.log('target group ips', targetGroupIps.join(', '));
+                    // * detect new healthy master nodes and add them to the load balancer
                     const newHealthyIps = nodeList
-                        .filter(({ master, healthy, ip }) => master && healthy && !targetGroupIps.includes(ip))
+                        .filter(({ master, healthy, ip }) => master && healthy)
                         .map(({ ip }) => instanceList.find((instance) => instance.PublicIpAddress === ip)
                         ?.PrivateIpAddress)
-                        .filter((ip) => ip);
-                    if (newHealthyIps.length)
+                        .filter((ip) => ip && !targetGroupIps.includes(ip));
+                    if (newHealthyIps.length) {
+                        console.log('New healthy master nodes detected:', newHealthyIps);
                         await (0, nlb_1.addMasterIpAddressesToLoadBalancer)(newHealthyIps);
+                    }
                     // * detect unhealthy nodes and remove them from the load balancer
-                    const existingUnhealthyIps = targetGroupIps.filter((ip) => !nodes[ip] || !nodes[ip].healthy);
+                    const existingUnhealthyIps = targetGroupIps.filter((ip) => {
+                        const publicIp = instanceList.find((instance) => instance.PrivateIpAddress === ip)?.PublicIpAddress;
+                        return publicIp && (!nodes[publicIp] || !nodes[publicIp].healthy);
+                    });
                     nodeList
                         .filter(({ healthy }) => !healthy)
                         .forEach(({ ip }) => {

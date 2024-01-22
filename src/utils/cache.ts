@@ -138,9 +138,7 @@ export async function checkRedisClusterHealth() {
                 const ownerInstance = instanceList.find(
                     (instance) => instance.PrivateIpAddress === ownerIp
                 );
-                if (!ownerInstance)
-                    throw new Error(`Owner Instance ${ownerIp} not found in the ASG.`);
-                if (ownerIp === clusterFiles.ipAddress) {
+                if (ownerInstance && ownerIp === clusterFiles.ipAddress) {
                     // * I am the owner node. Let's check if there are new nodes in the ASG
                     const newInstanceIps = instanceList
                         .filter(({ PublicIpAddress }) => PublicIpAddress && !nodes[PublicIpAddress])
@@ -177,6 +175,7 @@ export async function checkRedisClusterHealth() {
                             await new Promise((resolve) => setTimeout(resolve, 5000));
 
                             // * make sure the new nodes are healthy and the unhealthy nodes are removed
+                            console.log('>', clusterNodesCommand);
                             nodes = parseRedisNodes(execSync(clusterNodesCommand).toString());
                             nodeList = Object.values(nodes);
                             const healthyNewNodes = Object.values(nodes).filter(
@@ -200,20 +199,20 @@ export async function checkRedisClusterHealth() {
 
                     // * detect new healthy master nodes and add them to the load balancer
                     const newHealthyIps = nodeList
-                        .filter(({ master, healthy, ip }) => master && healthy)
+                        .filter(({ master, healthy }) => master && healthy)
                         .map(
                             ({ ip }) =>
-                                instanceList.find((instance) => instance.PublicIpAddress === ip)
+                                instanceList.find(({ PublicIpAddress }) => PublicIpAddress === ip)
                                     ?.PrivateIpAddress!
                         )
                         .filter((ip) => ip && !targetGroupIps.includes(ip));
                     if (newHealthyIps.length) {
-                        console.log('New healthy master nodes detected:', newHealthyIps);
+                        console.log('New healthy master nodes detected:', newHealthyIps.join(', '));
                         await addMasterIpAddressesToLoadBalancer(newHealthyIps);
                     }
 
                     // * detect unhealthy nodes and remove them from the load balancer
-                    const existingUnhealthyIps = targetGroupIps.filter((ip) => {
+                    const unhealthyIps = targetGroupIps.filter((ip) => {
                         const publicIp = instanceList.find(
                             (instance) => instance.PrivateIpAddress === ip
                         )?.PublicIpAddress;
@@ -225,17 +224,17 @@ export async function checkRedisClusterHealth() {
                             const privateIp = instanceList.find(
                                 (instance) => instance.PublicIpAddress === ip
                             )?.PrivateIpAddress;
-                            if (privateIp && !existingUnhealthyIps.includes(privateIp))
-                                existingUnhealthyIps.push(privateIp);
+                            if (privateIp && !unhealthyIps.includes(privateIp))
+                                unhealthyIps.push(privateIp);
                         });
-                    if (existingUnhealthyIps.length)
-                        await removeMasterIpAddressesFromLoadBalancer(existingUnhealthyIps);
+                    if (unhealthyIps.length) {
+                        console.log('Unhealthy master nodes detected:', unhealthyIps.join(', '));
+                        await removeMasterIpAddressesFromLoadBalancer(unhealthyIps);
+                    }
                 } else {
                     // * Check if the owner node is healthy
-                    if (!nodes[ownerInstance.PublicIpAddress!]?.healthy) {
-                        console.log(
-                            `Master node ${ownerIp} is not healthy. I am trying to take over.`
-                        );
+                    if (!ownerInstance || !nodes[ownerInstance.PublicIpAddress!]?.healthy) {
+                        console.log(`Master node ${ownerIp} is not healthy, trying to take over.`);
                         try {
                             await putOwnerNodeIP(clusterFiles.ipAddress, ownerIp);
                         } catch (e) {

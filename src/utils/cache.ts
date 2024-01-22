@@ -103,13 +103,14 @@ export async function checkRedisClusterHealth() {
                 console.log('>', gitPullCommand);
                 const sourceCodeChange = execSync(gitPullCommand).toString();
                 if (!sourceCodeChange.includes('Already up to date.')) {
+                    locked = false;
                     sourceCodeLastUpdatedAt = Date.now();
                     if (sourceCodeChange.includes('package.json')) {
                         console.log('package.json is updated, installing dependencies...');
                         execSync('npm install');
                     }
                     console.log('Source code is updated, restarting...');
-                    spawn('pm2', [`restart all`], { detached: true, stdio: 'ignore' });
+                    spawn('pm2', ['restart', 'all'], { detached: true, stdio: 'ignore' });
                     return;
                 }
             }

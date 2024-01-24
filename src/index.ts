@@ -6,7 +6,7 @@ async function main() {
     // ! put a memory threshold with pm2
 
     await checkRedisClusterHealth();
-    cron.schedule('*/5 * * * *', checkRedisClusterHealth).start();
+    cron.schedule('* * * * *', checkRedisClusterHealth).start();
 }
 
 main();

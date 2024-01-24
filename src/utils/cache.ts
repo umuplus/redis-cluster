@@ -167,6 +167,10 @@ export async function checkRedisClusterHealth() {
                         (node) => node.healthy && node.master && !node.slaves?.length
                     );
                     if (mastersWithoutSlaves.length) {
+                        console.log(
+                            'these nodes do not have slaves:',
+                            mastersWithoutSlaves.map(({ ip }) => ip).join(', ')
+                        );
                         for (let i = 0; i < mastersWithoutSlaves.length; i++) {
                             if (i % 2 === 0) continue;
 

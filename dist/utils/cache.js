@@ -201,7 +201,10 @@ async function checkRedisClusterHealth() {
                     // * detect unhealthy nodes and remove them from the load balancer
                     const unhealthyIps = targetGroupIps.filter((ip) => {
                         const publicIp = instanceList.find((instance) => instance.PrivateIpAddress === ip)?.PublicIpAddress;
-                        return publicIp && (!nodes[publicIp] || !nodes[publicIp].master || !nodes[publicIp].healthy);
+                        return (!publicIp ||
+                            !nodes[publicIp] ||
+                            !nodes[publicIp].master ||
+                            !nodes[publicIp].healthy);
                     });
                     nodeList
                         .filter(({ healthy }) => !healthy)

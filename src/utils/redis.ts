@@ -12,14 +12,14 @@ export function parseRedisNodes(payload: string) {
     const nodes = rawNodes.reduce((final: Record<string, RedisClusterNode>, node) => {
         if (node.startsWith('Warning')) return final;
 
-        const [id, ipAddress, _flags, masterId, _ping, _pong, _epoch, status] = node.split(' ');
+        const [id, ipAddress, flags, masterId, _ping, _pong, _epoch, status] = node.split(' ');
         const [ip] = ipAddress.split(':');
         const master = masterId === '-';
         final[ip] = {
             id,
             ip,
             master,
-            healthy: status === 'connected',
+            healthy: status === 'connected' && !flags.includes('fail'),
             slaveOf: master ? undefined : masterId,
             slaves: [],
         };

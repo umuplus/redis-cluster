@@ -4,7 +4,7 @@ import {
     removeMasterIpAddressesFromLoadBalancer,
 } from './nlb';
 import { clusterFiles } from './config';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import { getInstanceIds, getInstances } from './asg';
 import { getOwnerNodeIP, putOwnerNodeIP } from './db';
 import { parseRedisNodes } from './redis';
@@ -110,8 +110,7 @@ export async function checkRedisClusterHealth() {
                         execSync('npm install');
                     }
                     console.log('Source code is updated, restarting...');
-                    spawn('pm2', ['restart', 'all'], { detached: true, stdio: 'ignore' });
-                    return;
+                    process.exit(0);
                 }
             }
 
@@ -161,19 +160,23 @@ export async function checkRedisClusterHealth() {
                         console.log('>', clusterNodesCommand);
                         const nodesRaw = execSync(clusterNodesCommand).toString();
                         nodes = parseRedisNodes(nodesRaw);
-                        nodeList = Object.values(nodes).filter(
-                            (node) => node.healthy && node.master && !node.slaves?.length
-                        );
+                        nodeList = Object.values(nodes);
+                    }
 
-                        for (let i = 0; i < nodeList.length; i++) {
+                    const mastersWithoutSlaves = nodeList.filter(
+                        (node) => node.healthy && node.master && !node.slaves?.length
+                    );
+                    if (mastersWithoutSlaves.length) {
+                        for (let i = 0; i < mastersWithoutSlaves.length; i++) {
                             if (i % 2 === 0) continue;
 
-                            const masterNode = nodeList[i - 1];
-                            const slaveNode = nodeList[i];
-                            const command = `redis-cli -h ${slaveNode.ip} -a ${clusterFiles.password} cluster replicate ${masterNode.id}`;
+                            const master = mastersWithoutSlaves[i - 1];
+                            const slave = mastersWithoutSlaves[i];
+                            const command = `redis-cli -h ${slave.ip} -a ${clusterFiles.password} cluster replicate ${master.id}`;
                             console.log('>', command);
                             execSync(command);
                         }
+                        mustRebalance = true;
                     }
 
                     // * Check if there are unhealthy nodes in the cluster

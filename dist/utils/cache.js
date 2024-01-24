@@ -107,7 +107,7 @@ async function checkRedisClusterHealth() {
             console.log('>', monitorRedisCommand);
             const monitorRedisRaw = (0, child_process_1.execSync)(monitorRedisCommand).toString();
             const monitorRedis = (0, redis_1.parseRedisMonitor)(monitorRedisRaw);
-            const monitorEC2 = await (0, asg_1.getInstanceTypeOfEC2)();
+            const monitorEC2 = await (0, asg_1.getEC2Details)();
             const monitorPM2Raw = (0, child_process_1.execSync)('pm2 list').toString();
             const monitorPM2 = (0, asg_1.parsePM2Usage)(monitorPM2Raw);
             (0, fs_1.writeFileSync)('/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE, JSON.stringify({ redis: monitorRedis, ec2: monitorEC2, pm2: monitorPM2 }, null, 2));

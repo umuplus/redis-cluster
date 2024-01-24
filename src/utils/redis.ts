@@ -89,5 +89,5 @@ export function parseRedisMonitor(payload: string) {
         monitor.avgIdle = Math.round(monitor.avgIdle / monitor.count);
         monitor.avgTotMem = Math.round(monitor.avgTotMem / monitor.count);
     }
-    return monitor
+    return monitor;
 }

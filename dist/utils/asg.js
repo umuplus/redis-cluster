@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parsePM2Usage = exports.getInstanceTypeOfEC2 = exports.getInstanceIds = exports.getInstances = void 0;
+exports.parsePM2Usage = exports.getEC2Details = exports.getInstanceIds = exports.getInstances = void 0;
 const axios_1 = __importDefault(require("axios"));
 const check_disk_space_1 = __importDefault(require("check-disk-space"));
 const client_auto_scaling_1 = require("@aws-sdk/client-auto-scaling");
@@ -56,7 +56,7 @@ async function getInstanceIds(asg) {
     return instanceIds;
 }
 exports.getInstanceIds = getInstanceIds;
-async function getInstanceTypeOfEC2() {
+async function getEC2Details() {
     const instanceId = await axios_1.default
         .get('http://169.254.169.254/latest/meta-data/instance-type', {
         headers: { 'Content-Type': 'text/plain' },
@@ -84,12 +84,16 @@ async function getInstanceTypeOfEC2() {
         disk: await (0, check_disk_space_1.default)(process.env.HOME).catch(() => undefined),
     };
 }
-exports.getInstanceTypeOfEC2 = getInstanceTypeOfEC2;
+exports.getEC2Details = getEC2Details;
 function parsePM2Usage(payload) {
     for (const line of payload.split('\n')) {
-        if (!line || !line.includes('|'))
+        if (!line || !line.includes('│'))
             continue;
-        const [_, id, name, _namespace, version, mode, pid, uptime, restart, status, cpu, memory] = line.split('|').map((i) => i.trim());
+        console.log(line.split('│').map((i) => i.trim()));
+        const [id, name, _namespace, version, mode, pid, uptime, restart, status, cpu, memory] = line
+            .split('│')
+            .map((i) => i.trim())
+            .filter((i) => i);
         if (id === process.env.NODE_APP_INSTANCE) {
             return {
                 id,

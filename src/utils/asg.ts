@@ -52,7 +52,7 @@ export async function getInstanceIds(asg?: AutoScalingGroup) {
     return instanceIds;
 }
 
-export async function getInstanceTypeOfEC2() {
+export async function getEC2Details() {
     const instanceId = await axios
         .get('http://169.254.169.254/latest/meta-data/instance-type', {
             headers: { 'Content-Type': 'text/plain' },
@@ -86,10 +86,14 @@ export async function getInstanceTypeOfEC2() {
 
 export function parsePM2Usage(payload: string) {
     for (const line of payload.split('\n')) {
-        if (!line || !line.includes('|')) continue;
+        if (!line || !line.includes('│')) continue;
 
-        const [_, id, name, _namespace, version, mode, pid, uptime, restart, status, cpu, memory] =
-            line.split('|').map((i) => i.trim());
+        console.log(line.split('│').map((i) => i.trim()));
+        const [id, name, _namespace, version, mode, pid, uptime, restart, status, cpu, memory] =
+            line
+                .split('│')
+                .map((i) => i.trim())
+                .filter((i) => i);
         if (id === process.env.NODE_APP_INSTANCE) {
             return {
                 id,

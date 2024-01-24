@@ -5,7 +5,7 @@ import {
 } from './nlb';
 import { clusterFiles } from './config';
 import { execSync } from 'child_process';
-import { getInstanceIds, getInstanceTypeOfEC2, getInstances, parsePM2Usage } from './asg';
+import { getInstanceIds, getEC2Details, getInstances, parsePM2Usage } from './asg';
 import { getOwnerNodeIP, putOwnerNodeIP } from './db';
 import { parseRedisMonitor, parseRedisNodes } from './redis';
 import { writeFileSync } from 'fs';
@@ -123,7 +123,7 @@ export async function checkRedisClusterHealth() {
             const monitorRedisRaw = execSync(monitorRedisCommand).toString();
             const monitorRedis = parseRedisMonitor(monitorRedisRaw);
 
-            const monitorEC2 = await getInstanceTypeOfEC2();
+            const monitorEC2 = await getEC2Details();
             const monitorPM2Raw = execSync('pm2 list').toString();
             const monitorPM2 = parsePM2Usage(monitorPM2Raw);
 

@@ -153,6 +153,27 @@ export async function checkRedisClusterHealth() {
                             execSync(command);
                         }
                         mustRebalance = true;
+
+                        // * wait for the new nodes to be healthy as new masters
+                        await new Promise((resolve) => setTimeout(resolve, 5000));
+
+                        // * fetch new master nodes without slaves
+                        console.log('>', clusterNodesCommand);
+                        const nodesRaw = execSync(clusterNodesCommand).toString();
+                        nodes = parseRedisNodes(nodesRaw);
+                        nodeList = Object.values(nodes).filter(
+                            (node) => node.healthy && node.master && !node.slaves?.length
+                        );
+
+                        for (let i = 0; i < nodeList.length; i++) {
+                            if (i % 2 === 0) continue;
+
+                            const masterNode = nodeList[i - 1];
+                            const slaveNode = nodeList[i];
+                            const command = `redis-cli -h ${slaveNode.ip} -a ${clusterFiles.password} cluster replicate ${masterNode.id}`;
+                            console.log('>', command);
+                            execSync(command);
+                        }
                     }
 
                     // * Check if there are unhealthy nodes in the cluster

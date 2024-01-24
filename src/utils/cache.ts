@@ -245,7 +245,7 @@ export async function checkRedisClusterHealth() {
                         const publicIp = instanceList.find(
                             (instance) => instance.PrivateIpAddress === ip
                         )?.PublicIpAddress;
-                        return publicIp && (!nodes[publicIp] || !nodes[publicIp].healthy);
+                        return publicIp && (!nodes[publicIp] || !nodes[publicIp].master || !nodes[publicIp].healthy);
                     });
                     nodeList
                         .filter(({ healthy }) => !healthy)

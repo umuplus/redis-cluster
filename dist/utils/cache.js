@@ -84,6 +84,8 @@ async function checkRedisClusterHealth() {
         }
         else {
             if (!sourceCodeLastUpdatedAt || Date.now() - sourceCodeLastUpdatedAt > delay) {
+                if (!sourceCodeLastUpdatedAt)
+                    sourceCodeLastUpdatedAt = Date.now();
                 // * git pull
                 const gitPullCommand = 'git pull';
                 console.log('>', gitPullCommand);

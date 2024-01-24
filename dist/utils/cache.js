@@ -103,7 +103,7 @@ async function checkRedisClusterHealth() {
                 }
             }
             // * monitor redis cluster
-            const monitorRedisCommand = `redis-cli -a ${config_1.clusterFiles.password} cluster nodes`;
+            const monitorRedisCommand = `redis-cli -a ${config_1.clusterFiles.password} client list`;
             console.log('>', monitorRedisCommand);
             const monitorRedisRaw = (0, child_process_1.execSync)(monitorRedisCommand).toString();
             const monitorRedis = (0, redis_1.parseRedisMonitor)(monitorRedisRaw);

@@ -118,7 +118,7 @@ export async function checkRedisClusterHealth() {
             }
 
             // * monitor redis cluster
-            const monitorRedisCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;
+            const monitorRedisCommand = `redis-cli -a ${clusterFiles.password} client list`;
             console.log('>', monitorRedisCommand);
             const monitorRedisRaw = execSync(monitorRedisCommand).toString();
             const monitorRedis = parseRedisMonitor(monitorRedisRaw);

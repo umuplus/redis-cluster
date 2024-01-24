@@ -89,14 +89,14 @@ async function checkRedisClusterHealth() {
                 console.log('>', gitPullCommand);
                 const sourceCodeChange = (0, child_process_1.execSync)(gitPullCommand).toString();
                 if (!sourceCodeChange.includes('Already up to date.')) {
+                    locked = false;
                     sourceCodeLastUpdatedAt = Date.now();
                     if (sourceCodeChange.includes('package.json')) {
                         console.log('package.json is updated, installing dependencies...');
                         (0, child_process_1.execSync)('npm install');
                     }
                     console.log('Source code is updated, restarting...');
-                    (0, child_process_1.spawn)('pm2', [`restart all`], { detached: true, stdio: 'ignore' });
-                    return;
+                    process.exit(0);
                 }
             }
             const instanceIds = await (0, asg_1.getInstanceIds)();
@@ -117,9 +117,7 @@ async function checkRedisClusterHealth() {
                 if (!ownerIp)
                     throw new Error('Master node IP not found in the DB');
                 const ownerInstance = instanceList.find((instance) => instance.PrivateIpAddress === ownerIp);
-                if (!ownerInstance)
-                    throw new Error(`Owner Instance ${ownerIp} not found in the ASG.`);
-                if (ownerIp === config_1.clusterFiles.ipAddress) {
+                if (ownerInstance && ownerIp === config_1.clusterFiles.ipAddress) {
                     // * I am the owner node. Let's check if there are new nodes in the ASG
                     const newInstanceIps = instanceList
                         .filter(({ PublicIpAddress }) => PublicIpAddress && !nodes[PublicIpAddress])
@@ -129,6 +127,27 @@ async function checkRedisClusterHealth() {
                         // * add new nodes to the cluster
                         for (const ip of newInstanceIps) {
                             const command = `redis-cli -a ${config_1.clusterFiles.password} cluster meet ${ip} 6379`;
+                            console.log('>', command);
+                            (0, child_process_1.execSync)(command);
+                        }
+                        mustRebalance = true;
+                        // * wait for the new nodes to be healthy as new masters
+                        await new Promise((resolve) => setTimeout(resolve, 5000));
+                        // * fetch new master nodes without slaves
+                        console.log('>', clusterNodesCommand);
+                        const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
+                        nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
+                        nodeList = Object.values(nodes);
+                    }
+                    const mastersWithoutSlaves = nodeList.filter((node) => node.healthy && node.master && !node.slaves?.length);
+                    if (mastersWithoutSlaves.length) {
+                        console.log('these nodes do not have slaves:', mastersWithoutSlaves.map(({ ip }) => ip).join(', '));
+                        for (let i = 0; i < mastersWithoutSlaves.length; i++) {
+                            if (i % 2 === 0)
+                                continue;
+                            const master = mastersWithoutSlaves[i - 1];
+                            const slave = mastersWithoutSlaves[i];
+                            const command = `redis-cli -h ${slave.ip} -a ${config_1.clusterFiles.password} cluster replicate ${master.id}`;
                             console.log('>', command);
                             (0, child_process_1.execSync)(command);
                         }
@@ -153,6 +172,7 @@ async function checkRedisClusterHealth() {
                                 break;
                             await new Promise((resolve) => setTimeout(resolve, 5000));
                             // * make sure the new nodes are healthy and the unhealthy nodes are removed
+                            console.log('>', clusterNodesCommand);
                             nodes = (0, redis_1.parseRedisNodes)((0, child_process_1.execSync)(clusterNodesCommand).toString());
                             nodeList = Object.values(nodes);
                             const healthyNewNodes = Object.values(nodes).filter((node) => newInstanceIps.includes(node.ip) && node.healthy);
@@ -170,16 +190,16 @@ async function checkRedisClusterHealth() {
                     console.log('target group ips', targetGroupIps.join(', '));
                     // * detect new healthy master nodes and add them to the load balancer
                     const newHealthyIps = nodeList
-                        .filter(({ master, healthy, ip }) => master && healthy)
-                        .map(({ ip }) => instanceList.find((instance) => instance.PublicIpAddress === ip)
+                        .filter(({ master, healthy }) => master && healthy)
+                        .map(({ ip }) => instanceList.find(({ PublicIpAddress }) => PublicIpAddress === ip)
                         ?.PrivateIpAddress)
                         .filter((ip) => ip && !targetGroupIps.includes(ip));
                     if (newHealthyIps.length) {
-                        console.log('New healthy master nodes detected:', newHealthyIps);
+                        console.log('New healthy master nodes detected:', newHealthyIps.join(', '));
                         await (0, nlb_1.addMasterIpAddressesToLoadBalancer)(newHealthyIps);
                     }
                     // * detect unhealthy nodes and remove them from the load balancer
-                    const existingUnhealthyIps = targetGroupIps.filter((ip) => {
+                    const unhealthyIps = targetGroupIps.filter((ip) => {
                         const publicIp = instanceList.find((instance) => instance.PrivateIpAddress === ip)?.PublicIpAddress;
                         return publicIp && (!nodes[publicIp] || !nodes[publicIp].healthy);
                     });
@@ -187,16 +207,18 @@ async function checkRedisClusterHealth() {
                         .filter(({ healthy }) => !healthy)
                         .forEach(({ ip }) => {
                         const privateIp = instanceList.find((instance) => instance.PublicIpAddress === ip)?.PrivateIpAddress;
-                        if (privateIp && !existingUnhealthyIps.includes(privateIp))
-                            existingUnhealthyIps.push(privateIp);
+                        if (privateIp && !unhealthyIps.includes(privateIp))
+                            unhealthyIps.push(privateIp);
                     });
-                    if (existingUnhealthyIps.length)
-                        await (0, nlb_1.removeMasterIpAddressesFromLoadBalancer)(existingUnhealthyIps);
+                    if (unhealthyIps.length) {
+                        console.log('Unhealthy master nodes detected:', unhealthyIps.join(', '));
+                        await (0, nlb_1.removeMasterIpAddressesFromLoadBalancer)(unhealthyIps);
+                    }
                 }
                 else {
                     // * Check if the owner node is healthy
-                    if (!nodes[ownerInstance.PublicIpAddress]?.healthy) {
-                        console.log(`Master node ${ownerIp} is not healthy. I am trying to take over.`);
+                    if (!ownerInstance || !nodes[ownerInstance.PublicIpAddress]?.healthy) {
+                        console.log(`Master node ${ownerIp} is not healthy, trying to take over.`);
                         try {
                             await (0, db_1.putOwnerNodeIP)(config_1.clusterFiles.ipAddress, ownerIp);
                         }

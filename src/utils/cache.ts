@@ -5,9 +5,10 @@ import {
 } from './nlb';
 import { clusterFiles } from './config';
 import { execSync } from 'child_process';
-import { getInstanceIds, getInstances } from './asg';
+import { getInstanceIds, getInstanceTypeOfEC2, getInstances, parsePM2Usage } from './asg';
 import { getOwnerNodeIP, putOwnerNodeIP } from './db';
-import { parseRedisNodes } from './redis';
+import { parseRedisMonitor, parseRedisNodes } from './redis';
+import { writeFileSync } from 'fs';
 
 let locked = false;
 const delay = 60000 * 15; // * 15 minutes
@@ -116,6 +117,22 @@ export async function checkRedisClusterHealth() {
                 }
             }
 
+            // * monitor redis cluster
+            const monitorRedisCommand = `redis-cli -a ${clusterFiles.password} cluster nodes`;
+            console.log('>', monitorRedisCommand);
+            const monitorRedisRaw = execSync(monitorRedisCommand).toString();
+            const monitorRedis = parseRedisMonitor(monitorRedisRaw);
+
+            const monitorEC2 = await getInstanceTypeOfEC2();
+            const monitorPM2Raw = execSync('pm2 list').toString();
+            const monitorPM2 = parsePM2Usage(monitorPM2Raw);
+
+            writeFileSync(
+                '/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE,
+                JSON.stringify({ redis: monitorRedis, ec2: monitorEC2, pm2: monitorPM2 }, null, 2)
+            );
+
+            // * get instances from asg
             const instanceIds = await getInstanceIds();
             const instances = await getInstances(instanceIds);
             const instanceList = Object.values(instances);

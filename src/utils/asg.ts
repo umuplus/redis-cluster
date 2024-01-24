@@ -1,5 +1,8 @@
+import axios from 'axios';
+import checkDiskSpace from 'check-disk-space';
 import { AutoScaling, AutoScalingGroup } from '@aws-sdk/client-auto-scaling';
 import { clusterFiles } from './config';
+import { cpus, freemem, totalmem } from 'os';
 import { EC2, Instance } from '@aws-sdk/client-ec2';
 
 const AUTO_SCALING_GROUP_NAME = 'RedisASG';
@@ -47,4 +50,61 @@ export async function getInstanceIds(asg?: AutoScalingGroup) {
         throw new Error(`There are only ${instanceCount}/${capacity} instances available.`);
 
     return instanceIds;
+}
+
+export async function getInstanceTypeOfEC2() {
+    const instanceId = await axios
+        .get('http://169.254.169.254/latest/meta-data/instance-type', {
+            headers: { 'Content-Type': 'text/plain' },
+        })
+        .then((res) => res.data)
+        .catch(() => undefined);
+
+    const privateIp = await axios
+        .get('http://169.254.169.254/latest/meta-data/local-ipv4', {
+            headers: { 'Content-Type': 'text/plain' },
+        })
+        .then((res) => res.data)
+        .catch(() => undefined);
+
+    const publicIp = await axios
+        .get('http://169.254.169.254/latest/meta-data/public-ipv4', {
+            headers: { 'Content-Type': 'text/plain' },
+        })
+        .then((res) => res.data)
+        .catch(() => undefined);
+
+    return {
+        instanceId,
+        privateIp,
+        publicIp,
+        cpus: cpus(),
+        memory: { total: totalmem(), free: freemem() },
+        disk: await checkDiskSpace(process.env.HOME!).catch(() => undefined),
+    };
+}
+
+export function parsePM2Usage(payload: string) {
+    for (const line of payload.split('\n')) {
+        if (!line || !line.includes('|')) continue;
+
+        const [_, id, name, _namespace, version, mode, pid, uptime, restart, status, cpu, memory] =
+            line.split('|').map((i) => i.trim());
+        if (id === process.env.NODE_APP_INSTANCE) {
+            return {
+                id,
+                name,
+                version,
+                mode,
+                pid,
+                uptime,
+                restart,
+                status,
+                cpu,
+                memory,
+            };
+        }
+    }
+
+    return undefined;
 }

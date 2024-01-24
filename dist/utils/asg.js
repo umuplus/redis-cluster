@@ -1,8 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getInstanceIds = exports.getInstances = void 0;
+exports.parsePM2Usage = exports.getInstanceTypeOfEC2 = exports.getInstanceIds = exports.getInstances = void 0;
+const axios_1 = __importDefault(require("axios"));
+const check_disk_space_1 = __importDefault(require("check-disk-space"));
 const client_auto_scaling_1 = require("@aws-sdk/client-auto-scaling");
 const config_1 = require("./config");
+const os_1 = require("os");
 const client_ec2_1 = require("@aws-sdk/client-ec2");
 const AUTO_SCALING_GROUP_NAME = 'RedisASG';
 const autoScaling = new client_auto_scaling_1.AutoScaling(config_1.clusterFiles.credentials);
@@ -50,3 +56,55 @@ async function getInstanceIds(asg) {
     return instanceIds;
 }
 exports.getInstanceIds = getInstanceIds;
+async function getInstanceTypeOfEC2() {
+    const instanceId = await axios_1.default
+        .get('http://169.254.169.254/latest/meta-data/instance-type', {
+        headers: { 'Content-Type': 'text/plain' },
+    })
+        .then((res) => res.data)
+        .catch(() => undefined);
+    const privateIp = await axios_1.default
+        .get('http://169.254.169.254/latest/meta-data/local-ipv4', {
+        headers: { 'Content-Type': 'text/plain' },
+    })
+        .then((res) => res.data)
+        .catch(() => undefined);
+    const publicIp = await axios_1.default
+        .get('http://169.254.169.254/latest/meta-data/public-ipv4', {
+        headers: { 'Content-Type': 'text/plain' },
+    })
+        .then((res) => res.data)
+        .catch(() => undefined);
+    return {
+        instanceId,
+        privateIp,
+        publicIp,
+        cpus: (0, os_1.cpus)(),
+        memory: { total: (0, os_1.totalmem)(), free: (0, os_1.freemem)() },
+        disk: await (0, check_disk_space_1.default)(process.env.HOME).catch(() => undefined),
+    };
+}
+exports.getInstanceTypeOfEC2 = getInstanceTypeOfEC2;
+function parsePM2Usage(payload) {
+    for (const line of payload.split('\n')) {
+        if (!line || !line.includes('|'))
+            continue;
+        const [_, id, name, _namespace, version, mode, pid, uptime, restart, status, cpu, memory] = line.split('|').map((i) => i.trim());
+        if (id === process.env.NODE_APP_INSTANCE) {
+            return {
+                id,
+                name,
+                version,
+                mode,
+                pid,
+                uptime,
+                restart,
+                status,
+                cpu,
+                memory,
+            };
+        }
+    }
+    return undefined;
+}
+exports.parsePM2Usage = parsePM2Usage;

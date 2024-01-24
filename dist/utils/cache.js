@@ -7,6 +7,7 @@ const child_process_1 = require("child_process");
 const asg_1 = require("./asg");
 const db_1 = require("./db");
 const redis_1 = require("./redis");
+const fs_1 = require("fs");
 let locked = false;
 const delay = 60000 * 15; // * 15 minutes
 let sourceCodeLastUpdatedAt;
@@ -101,6 +102,16 @@ async function checkRedisClusterHealth() {
                     process.exit(0);
                 }
             }
+            // * monitor redis cluster
+            const monitorRedisCommand = `redis-cli -a ${config_1.clusterFiles.password} cluster nodes`;
+            console.log('>', monitorRedisCommand);
+            const monitorRedisRaw = (0, child_process_1.execSync)(monitorRedisCommand).toString();
+            const monitorRedis = (0, redis_1.parseRedisMonitor)(monitorRedisRaw);
+            const monitorEC2 = await (0, asg_1.getInstanceTypeOfEC2)();
+            const monitorPM2Raw = (0, child_process_1.execSync)('pm2 list').toString();
+            const monitorPM2 = (0, asg_1.parsePM2Usage)(monitorPM2Raw);
+            (0, fs_1.writeFileSync)('/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE, JSON.stringify({ redis: monitorRedis, ec2: monitorEC2, pm2: monitorPM2 }, null, 2));
+            // * get instances from asg
             const instanceIds = await (0, asg_1.getInstanceIds)();
             const instances = await (0, asg_1.getInstances)(instanceIds);
             const instanceList = Object.values(instances);

@@ -56,25 +56,31 @@ async function getInstanceIds(asg) {
     return instanceIds;
 }
 exports.getInstanceIds = getInstanceIds;
+let instanceId;
+let privateIp;
+let publicIp;
 async function getEC2Details() {
-    const instanceId = await axios_1.default
-        .get('http://169.254.169.254/latest/meta-data/instance-type', {
-        headers: { 'Content-Type': 'text/plain' },
-    })
-        .then((res) => res.data)
-        .catch(() => undefined);
-    const privateIp = await axios_1.default
-        .get('http://169.254.169.254/latest/meta-data/local-ipv4', {
-        headers: { 'Content-Type': 'text/plain' },
-    })
-        .then((res) => res.data)
-        .catch(() => undefined);
-    const publicIp = await axios_1.default
-        .get('http://169.254.169.254/latest/meta-data/public-ipv4', {
-        headers: { 'Content-Type': 'text/plain' },
-    })
-        .then((res) => res.data)
-        .catch(() => undefined);
+    if (!instanceId)
+        instanceId = await axios_1.default
+            .get('http://169.254.169.254/latest/meta-data/instance-type', {
+            headers: { 'Content-Type': 'text/plain' },
+        })
+            .then((res) => res.data)
+            .catch(() => undefined);
+    if (!privateIp)
+        privateIp = await axios_1.default
+            .get('http://169.254.169.254/latest/meta-data/local-ipv4', {
+            headers: { 'Content-Type': 'text/plain' },
+        })
+            .then((res) => res.data)
+            .catch(() => undefined);
+    if (!publicIp)
+        publicIp = await axios_1.default
+            .get('http://169.254.169.254/latest/meta-data/public-ipv4', {
+            headers: { 'Content-Type': 'text/plain' },
+        })
+            .then((res) => res.data)
+            .catch(() => undefined);
     return {
         instanceId,
         privateIp,
@@ -89,7 +95,6 @@ function parsePM2Usage(payload) {
     for (const line of payload.split('\n')) {
         if (!line || !line.includes('│'))
             continue;
-        console.log(line.split('│').map((i) => i.trim()));
         const [id, name, _namespace, version, mode, pid, uptime, restart, status, cpu, memory] = line
             .split('│')
             .map((i) => i.trim())

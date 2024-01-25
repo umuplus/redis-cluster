@@ -52,27 +52,34 @@ export async function getInstanceIds(asg?: AutoScalingGroup) {
     return instanceIds;
 }
 
+let instanceId: string | undefined;
+let privateIp: string | undefined;
+let publicIp: string | undefined;
+
 export async function getEC2Details() {
-    const instanceId = await axios
-        .get('http://169.254.169.254/latest/meta-data/instance-type', {
-            headers: { 'Content-Type': 'text/plain' },
-        })
-        .then((res) => res.data)
-        .catch(() => undefined);
+    if (!instanceId)
+        instanceId = await axios
+            .get('http://169.254.169.254/latest/meta-data/instance-type', {
+                headers: { 'Content-Type': 'text/plain' },
+            })
+            .then((res) => res.data)
+            .catch(() => undefined);
 
-    const privateIp = await axios
-        .get('http://169.254.169.254/latest/meta-data/local-ipv4', {
-            headers: { 'Content-Type': 'text/plain' },
-        })
-        .then((res) => res.data)
-        .catch(() => undefined);
+    if (!privateIp)
+        privateIp = await axios
+            .get('http://169.254.169.254/latest/meta-data/local-ipv4', {
+                headers: { 'Content-Type': 'text/plain' },
+            })
+            .then((res) => res.data)
+            .catch(() => undefined);
 
-    const publicIp = await axios
-        .get('http://169.254.169.254/latest/meta-data/public-ipv4', {
-            headers: { 'Content-Type': 'text/plain' },
-        })
-        .then((res) => res.data)
-        .catch(() => undefined);
+    if (!publicIp)
+        publicIp = await axios
+            .get('http://169.254.169.254/latest/meta-data/public-ipv4', {
+                headers: { 'Content-Type': 'text/plain' },
+            })
+            .then((res) => res.data)
+            .catch(() => undefined);
 
     return {
         instanceId,

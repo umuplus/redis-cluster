@@ -88,7 +88,6 @@ export function parsePM2Usage(payload: string) {
     for (const line of payload.split('\n')) {
         if (!line || !line.includes('│')) continue;
 
-        console.log(line.split('│').map((i) => i.trim()));
         const [id, name, _namespace, version, mode, pid, uptime, restart, status, cpu, memory] =
             line
                 .split('│')

@@ -1,6 +1,10 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.checkRedisClusterHealth = void 0;
+const axios_1 = __importDefault(require("axios"));
 const nlb_1 = require("./nlb");
 const config_1 = require("./config");
 const child_process_1 = require("child_process");
@@ -38,6 +42,19 @@ async function checkRedisClusterHealth() {
             .includes('cluster_state:ok');
         if (!redisClusterStatus) {
             console.log('redis cluster is not running');
+            if (config_1.clusterFiles.adminApiKey) {
+                // * monitor redis cluster
+                const monitorRedisCommand = `redis-cli -a ${config_1.clusterFiles.password} client list`;
+                console.log('>', monitorRedisCommand);
+                const monitorRedisRaw = (0, child_process_1.execSync)(monitorRedisCommand).toString();
+                const monitorRedis = (0, redis_1.parseRedisMonitor)(monitorRedisRaw);
+                const monitorEC2 = await (0, asg_1.getEC2Details)();
+                const monitorPM2Raw = (0, child_process_1.execSync)('pm2 list').toString();
+                const monitorPM2 = (0, asg_1.parsePM2Usage)(monitorPM2Raw);
+                const monitor = { redis: { ...monitorRedis, master: false, healthy: false, cluster: false }, ec2: monitorEC2, pm2: monitorPM2 };
+                (0, fs_1.writeFileSync)('/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE, JSON.stringify(monitor, null, 2));
+                await axios_1.default.post(`?????`, monitor, { headers: { 'x-api-key': config_1.clusterFiles.adminApiKey } });
+            }
             // * check if the instances in the ASG are healthy and ready for the cluster
             const instanceIds = await (0, asg_1.getInstanceIds)();
             const instances = await (0, asg_1.getInstances)(instanceIds);
@@ -102,15 +119,6 @@ async function checkRedisClusterHealth() {
                     process.exit(0);
                 }
             }
-            // * monitor redis cluster
-            const monitorRedisCommand = `redis-cli -a ${config_1.clusterFiles.password} client list`;
-            console.log('>', monitorRedisCommand);
-            const monitorRedisRaw = (0, child_process_1.execSync)(monitorRedisCommand).toString();
-            const monitorRedis = (0, redis_1.parseRedisMonitor)(monitorRedisRaw);
-            const monitorEC2 = await (0, asg_1.getEC2Details)();
-            const monitorPM2Raw = (0, child_process_1.execSync)('pm2 list').toString();
-            const monitorPM2 = (0, asg_1.parsePM2Usage)(monitorPM2Raw);
-            (0, fs_1.writeFileSync)('/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE, JSON.stringify({ redis: monitorRedis, ec2: monitorEC2, pm2: monitorPM2 }, null, 2));
             // * get instances from asg
             const instanceIds = await (0, asg_1.getInstanceIds)();
             const instances = await (0, asg_1.getInstances)(instanceIds);
@@ -125,6 +133,19 @@ async function checkRedisClusterHealth() {
             const nodesRaw = (0, child_process_1.execSync)(clusterNodesCommand).toString();
             let nodes = (0, redis_1.parseRedisNodes)(nodesRaw);
             let nodeList = Object.values(nodes);
+            if (config_1.clusterFiles.adminApiKey) {
+                // * monitor redis cluster
+                const monitorRedisCommand = `redis-cli -a ${config_1.clusterFiles.password} client list`;
+                console.log('>', monitorRedisCommand);
+                const monitorRedisRaw = (0, child_process_1.execSync)(monitorRedisCommand).toString();
+                const monitorRedis = (0, redis_1.parseRedisMonitor)(monitorRedisRaw);
+                const monitorEC2 = await (0, asg_1.getEC2Details)();
+                const monitorPM2Raw = (0, child_process_1.execSync)('pm2 list').toString();
+                const monitorPM2 = (0, asg_1.parsePM2Usage)(monitorPM2Raw);
+                const monitor = { redis: { ...monitorRedis, master: nodes[myPublicIp]?.slaveOf || true, healthy: !!nodes[myPublicIp]?.healthy }, ec2: monitorEC2, pm2: monitorPM2 };
+                (0, fs_1.writeFileSync)('/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE, JSON.stringify(monitor, null, 2));
+                await axios_1.default.post(`?????`, monitor, { headers: { 'x-api-key': config_1.clusterFiles.adminApiKey } });
+            }
             if (nodes[myPublicIp]?.master) {
                 const ownerIp = await (0, db_1.getOwnerNodeIP)();
                 if (!ownerIp)

@@ -54,6 +54,7 @@ export function parseRedisMonitor(payload: string) {
         minTotMem: Infinity,
         maxTotMem: -Infinity,
         avgTotMem: 0,
+        cluster: true,
     };
     for (const line of payload.split('\n')) {
         if (!line || line.startsWith('#') || line.startsWith('Warning:') || !line.includes('id='))

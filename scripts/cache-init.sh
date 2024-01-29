@@ -23,6 +23,7 @@ echo "$CREDENTIALS" > $REDIS_CLUSTER_FILES/credentials.json
 echo "{{CLUSTER_REPLICAS}}" > $REDIS_CLUSTER_FILES/replicas
 echo "{{NLB_ARN}}" > $REDIS_CLUSTER_FILES/nlb
 echo "{{REDIS_PASSWORD}}" > $REDIS_CLUSTER_FILES/password
+echo "{{ADMIN_API_KEY}}" > $REDIS_CLUSTER_FILES/adminApiKey
 echo "{{TARGET_GROUP_ARN}}" > $REDIS_CLUSTER_FILES/target-group
 
 chown -Rf ubuntu:ubuntu $REDIS_CLUSTER_FILES

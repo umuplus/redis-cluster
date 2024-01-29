@@ -78,9 +78,14 @@ async function deploy() {
 
         let password = config.REDIS_PASSWORD?.val.trim();
         const hasPassword = !!password;
-        if (!password) password = generatePassword();
+        if (!hasPassword) password = generatePassword();
         writeFileSync(joinPath(pathTmp, 'password'), password);
         writeFileSync(joinPath(pathTmp, 'credentials'), JSON.stringify(profiles[profile]));
+
+        let adminApiKey = config.ADMIN_API_KEY?.val.trim();
+        const hasAdminApiKey = !!adminApiKey;
+        if (!hasAdminApiKey) adminApiKey = generatePassword();
+        writeFileSync(joinPath(pathTmp, 'adminApiKey'), adminApiKey);
 
         execSync(`npm run cdk -- synth -q --profile ${profile}`, { stdio: 'inherit' });
 
@@ -95,6 +100,7 @@ async function deploy() {
 
         if (!hasKeys) await putSshKeysToDB(config.PRIVATE_KEY.val, config.PUBLIC_KEY.val);
         if (!hasPassword) await putRedisPassword(password);
+        if (!hasAdminApiKey) await putAdminApiKey(adminApiKey);
 
         console.log('cleaning up...');
         execSync('npm run clean', { stdio: 'inherit' });
@@ -164,6 +170,20 @@ async function putRedisPassword(password: string) {
         );
     } catch (e) {
         console.log('redis password not saved to db');
+    }
+}
+
+async function putAdminApiKey(apiKey: string) {
+    try {
+        console.log('saving admin api key to db');
+        await ddb!.send(
+            new PutCommand({
+                TableName,
+                Item: { pk: 'ADMIN_API_KEY', val: apiKey },
+            })
+        );
+    } catch (e) {
+        console.log('admin api key not saved to db');
     }
 }
 

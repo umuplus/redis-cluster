@@ -1,3 +1,4 @@
+import axios from 'axios';
 import {
     addMasterIpAddressesToLoadBalancer,
     getTargetGroupIpAddresses,
@@ -44,6 +45,26 @@ export async function checkRedisClusterHealth() {
             .includes('cluster_state:ok');
         if (!redisClusterStatus) {
             console.log('redis cluster is not running');
+
+            if (clusterFiles.adminApiKey) {
+                try {
+                    const monitorEC2 = await getEC2Details()
+                    const monitorPM2Raw = execSync('pm2 list').toString()
+                    const monitorPM2 = parsePM2Usage(monitorPM2Raw)
+
+                    const monitor = {
+                        redis: null,
+                        ec2: monitorEC2,
+                        pm2: monitorPM2,
+                    }
+                    writeFileSync('/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE, JSON.stringify(monitor, null, 2))
+                    await axios.post(`https://api.prod.retter.io/cn6mbumkh/CALL/RedisMonitor/tick/default`, monitor, {
+                        headers: { 'x-api-key': clusterFiles.adminApiKey },
+                    })
+                } catch (e) {
+                    console.error((e as Error).message)
+                }
+            }
 
             // * check if the instances in the ASG are healthy and ready for the cluster
             const instanceIds = await getInstanceIds();
@@ -117,21 +138,6 @@ export async function checkRedisClusterHealth() {
                 }
             }
 
-            // * monitor redis cluster
-            const monitorRedisCommand = `redis-cli -a ${clusterFiles.password} client list`;
-            console.log('>', monitorRedisCommand);
-            const monitorRedisRaw = execSync(monitorRedisCommand).toString();
-            const monitorRedis = parseRedisMonitor(monitorRedisRaw);
-
-            const monitorEC2 = await getEC2Details();
-            const monitorPM2Raw = execSync('pm2 list').toString();
-            const monitorPM2 = parsePM2Usage(monitorPM2Raw);
-
-            writeFileSync(
-                '/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE,
-                JSON.stringify({ redis: monitorRedis, ec2: monitorEC2, pm2: monitorPM2 }, null, 2)
-            );
-
             // * get instances from asg
             const instanceIds = await getInstanceIds();
             const instances = await getInstances(instanceIds);
@@ -150,6 +156,34 @@ export async function checkRedisClusterHealth() {
             const nodesRaw = execSync(clusterNodesCommand).toString();
             let nodes = parseRedisNodes(nodesRaw);
             let nodeList = Object.values(nodes);
+
+            if (clusterFiles.adminApiKey) {
+                try {
+                    // * monitor redis cluster
+                    const monitorRedisCommand = `redis-cli -a ${clusterFiles.password} client list`
+                    console.log('>', monitorRedisCommand)
+                    const monitorRedisRaw = execSync(monitorRedisCommand).toString()
+                    const monitorRedis = parseRedisMonitor(monitorRedisRaw)
+
+                    const monitorEC2 = await getEC2Details()
+                    const monitorPM2Raw = execSync('pm2 list').toString()
+                    const monitorPM2 = parsePM2Usage(monitorPM2Raw)
+
+                    const monitor = {
+                        redis: {
+                            nodes: nodes,
+                            list: monitorRedis,
+                        },
+                        ec2: monitorEC2,
+                        pm2: monitorPM2,
+                    }
+                    writeFileSync('/tmp/redis-cluster-monitor-' + process.env.NODE_APP_INSTANCE, JSON.stringify(monitor, null, 2))
+                    await axios.post(`https://api.prod.retter.io/cn6mbumkh/CALL/RedisMonitor/tick/default`, monitor, { headers: { 'x-api-key': clusterFiles.adminApiKey } })
+                } catch (e) {
+                    console.error((e as Error).message)
+                }
+            }
+
             if (nodes[myPublicIp]?.master) {
                 const ownerIp = await getOwnerNodeIP();
                 if (!ownerIp) throw new Error('Master node IP not found in the DB');
@@ -260,7 +294,7 @@ export async function checkRedisClusterHealth() {
                     }
 
                     // * detect unhealthy nodes and remove them from the load balancer
-                    const unhealthyIps = targetGroupIps.filter((ip) => {
+                    const unhealthyIps = targetGroupIps.filter((ip: any) => {
                         const publicIp = instanceList.find(
                             (instance) => instance.PrivateIpAddress === ip
                         )?.PublicIpAddress;

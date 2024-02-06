@@ -19,7 +19,13 @@ for (const netGroup of netGroups) {
     }
 }
 const clusterFilesPath = `${process.env.HOME}/cluster-files`;
+let adminApiKey = '';
+const adminApiKeyPath = `${clusterFilesPath}/adminApiKey`;
+if ((0, fs_1.existsSync)(adminApiKeyPath))
+    adminApiKey = (0, fs_1.readFileSync)(adminApiKeyPath, 'utf-8').trim();
 exports.clusterFiles = {
+    adminApiKey,
+    ipAddress,
     password: (0, fs_1.readFileSync)(`${clusterFilesPath}/password`, 'utf-8').trim(),
     privateKey: (0, fs_1.readFileSync)(`${clusterFilesPath}/key.pem`, 'utf-8'),
     publicKey: (0, fs_1.readFileSync)(`${clusterFilesPath}/key.pub`, 'utf-8'),
@@ -27,5 +33,4 @@ exports.clusterFiles = {
     replicas: parseInt((0, fs_1.readFileSync)(`${clusterFilesPath}/replicas`, 'utf-8').trim()),
     nlb: (0, fs_1.readFileSync)(`${clusterFilesPath}/nlb`, 'utf-8').trim(),
     targetGroup: (0, fs_1.readFileSync)(`${clusterFilesPath}/target-group`, 'utf-8').trim(),
-    ipAddress,
 };

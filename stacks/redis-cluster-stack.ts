@@ -69,6 +69,7 @@ export class RedisClusterStack extends Stack {
         const privateKey = readFileSync(`${rootFolder}/tmp/redis-cluster`, 'utf-8');
         const password = readFileSync(`${rootFolder}/tmp/password`, 'utf-8');
         const credentials = readFileSync(`${rootFolder}/tmp/credentials`, 'utf-8');
+        const adminApiKey = readFileSync(`${rootFolder}/tmp/adminApiKey`, 'utf-8');
 
         const { cluster } = packageJson;
         if (!cluster.master || cluster.master < 3)
@@ -125,6 +126,7 @@ export class RedisClusterStack extends Stack {
         const cacheInitPath = joinPath(rootFolder, 'scripts', 'cache-init.sh');
         const cacheInitSourceCode = readFileSync(cacheInitPath, 'utf-8')
             .replace(/{{REDIS_PASSWORD}}/g, password)
+            .replace('{{ADMIN_API_KEY}}', adminApiKey)
             .replace('{{PRIVATE_KEY}}', privateKey)
             .replace('{{PUBLIC_KEY}}', publicKey)
             .replace('{{CREDENTIALS}}', credentials)

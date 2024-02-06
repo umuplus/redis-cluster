@@ -89,7 +89,7 @@ export async function getEC2Details() {
         memory: { total: totalmem(), free: freemem() },
         disk: await checkDiskSpace(process.env.HOME!).catch(() => undefined),
         key: publicIp,
-        lastUpdated: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
     };
 }
 
@@ -116,7 +116,7 @@ export function parsePM2Usage(payload: string) {
                 cpu,
                 memory,
                 key: `${publicIp}-${pid}-${process.env.NODE_APP_INSTANCE}`,
-                lastUpdated: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
             };
         }
     }

@@ -48,7 +48,6 @@ async function checkRedisClusterHealth() {
                     const monitorPM2Raw = (0, child_process_1.execSync)('pm2 list').toString();
                     const monitorPM2 = (0, asg_1.parsePM2Usage)(monitorPM2Raw);
                     const monitor = {
-                        redis: null,
                         ec2: monitorEC2,
                         pm2: monitorPM2,
                     };
@@ -150,10 +149,8 @@ async function checkRedisClusterHealth() {
                     const monitorPM2Raw = (0, child_process_1.execSync)('pm2 list').toString();
                     const monitorPM2 = (0, asg_1.parsePM2Usage)(monitorPM2Raw);
                     const monitor = {
-                        redis: {
-                            nodes: nodes,
-                            list: monitorRedis,
-                        },
+                        clientList: monitorRedis,
+                        cluster: nodes,
                         ec2: monitorEC2,
                         pm2: monitorPM2,
                     };

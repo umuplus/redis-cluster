@@ -56,12 +56,12 @@ async function getInstanceIds(asg) {
     return instanceIds;
 }
 exports.getInstanceIds = getInstanceIds;
-let instanceId;
+let instanceType;
 let privateIp;
 let publicIp;
 async function getEC2Details() {
-    if (!instanceId)
-        instanceId = await axios_1.default
+    if (!instanceType)
+        instanceType = await axios_1.default
             .get('http://169.254.169.254/latest/meta-data/instance-type', {
             headers: { 'Content-Type': 'text/plain' },
         })
@@ -82,12 +82,14 @@ async function getEC2Details() {
             .then((res) => res.data)
             .catch(() => undefined);
     return {
-        instanceId,
+        instanceType,
         privateIp,
         publicIp,
         cpus: (0, os_1.cpus)(),
         memory: { total: (0, os_1.totalmem)(), free: (0, os_1.freemem)() },
         disk: await (0, check_disk_space_1.default)(process.env.HOME).catch(() => undefined),
+        key: publicIp,
+        updatedAt: new Date().toISOString(),
     };
 }
 exports.getEC2Details = getEC2Details;
@@ -111,6 +113,8 @@ function parsePM2Usage(payload) {
                 status,
                 cpu,
                 memory,
+                key: `${publicIp}-${pid}-${process.env.NODE_APP_INSTANCE}`,
+                updatedAt: new Date().toISOString(),
             };
         }
     }

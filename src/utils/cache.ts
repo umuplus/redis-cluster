@@ -53,7 +53,6 @@ export async function checkRedisClusterHealth() {
                     const monitorPM2 = parsePM2Usage(monitorPM2Raw)
 
                     const monitor = {
-                        redis: null,
                         ec2: monitorEC2,
                         pm2: monitorPM2,
                     }
@@ -169,11 +168,9 @@ export async function checkRedisClusterHealth() {
                     const monitorPM2Raw = execSync('pm2 list').toString()
                     const monitorPM2 = parsePM2Usage(monitorPM2Raw)
 
-                    const monitor = {
-                        redis: {
-                            cluster: nodes,
-                            client: monitorRedis,
-                        },
+                    const monitor = {         
+                        clientList: monitorRedis,  
+                        cluster: nodes,
                         ec2: monitorEC2,
                         pm2: monitorPM2,
                     }

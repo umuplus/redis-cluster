@@ -52,13 +52,13 @@ export async function getInstanceIds(asg?: AutoScalingGroup) {
     return instanceIds;
 }
 
-let instanceId: string | undefined;
+let instanceType: string | undefined;
 let privateIp: string | undefined;
 let publicIp: string | undefined;
 
 export async function getEC2Details() {
-    if (!instanceId)
-        instanceId = await axios
+    if (!instanceType)
+        instanceType = await axios
             .get('http://169.254.169.254/latest/meta-data/instance-type', {
                 headers: { 'Content-Type': 'text/plain' },
             })
@@ -82,16 +82,19 @@ export async function getEC2Details() {
             .catch(() => undefined);
 
     return {
-        instanceId,
+        instanceType,
         privateIp,
         publicIp,
         cpus: cpus(),
         memory: { total: totalmem(), free: freemem() },
         disk: await checkDiskSpace(process.env.HOME!).catch(() => undefined),
+        key: publicIp,
+        lastUpdated: new Date().toISOString(),
     };
 }
 
 export function parsePM2Usage(payload: string) {
+
     for (const line of payload.split('\n')) {
         if (!line || !line.includes('│')) continue;
 
@@ -112,6 +115,8 @@ export function parsePM2Usage(payload: string) {
                 status,
                 cpu,
                 memory,
+                key: `${publicIp}-${pid}-${process.env.NODE_APP_INSTANCE}`,
+                lastUpdated: new Date().toISOString(),
             };
         }
     }

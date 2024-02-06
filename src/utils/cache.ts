@@ -171,8 +171,8 @@ export async function checkRedisClusterHealth() {
 
                     const monitor = {
                         redis: {
-                            nodes: nodes,
-                            list: monitorRedis,
+                            cluster: nodes,
+                            client: monitorRedis,
                         },
                         ec2: monitorEC2,
                         pm2: monitorPM2,

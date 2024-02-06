@@ -49,7 +49,7 @@ async function deploy() {
         const pathTmp = joinPath(__dirname, 'tmp');
         const pathNodeJs = joinPath(pathTmp, 'nodejs');
         mkdirSync(pathNodeJs, { recursive: true });
-        execSync(`cp package*.json ${pathNodeJs}/.`, { stdio: 'inherit' });
+        execSync(`cp package*.json "${pathNodeJs}"/.`, { stdio: 'inherit' });
 
         console.log('installing production dependencies only...');
         execSync('npm install --production --silent', { cwd: pathNodeJs, stdio: 'inherit' });
